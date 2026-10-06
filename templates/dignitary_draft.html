@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добавление сановника</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="phone">
+    <main class="page">
+        <h1 class="page__title">Новый сановник</h1>
+
+        <form class="draft-form">
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Медиа</h2>
+                <div class="draft-form__media">
+                    <label class="draft-form__media-item">
+                        <img class="draft-form__preview" src="{{ .dignitary.ImageURL }}" alt="{{ .dignitary.Name }}">
+                        <span class="draft-form__caption">Изображение · {{ .dignitary.ImageKey }}</span>
+                        <input type="file" name="dignitary_image" accept="image/*">
+                    </label>
+                    <label class="draft-form__media-item">
+                        <video class="draft-form__preview" src="{{ .dignitary.VideoURL }}" muted playsinline></video>
+                        <span class="draft-form__caption">Видео · {{ .dignitary.VideoKey }}</span>
+                        <input type="file" name="dignitary_video" accept="video/*">
+                    </label>
+                </div>
+            </section>
+
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Описание</h2>
+                <label class="field">
+                    <span class="field__label">Имя сановника</span>
+                    <input class="field__input" type="text" name="dignitary_name" value="{{ .dignitary.Name }}">
+                </label>
+                <label class="field">
+                    <span class="field__label">Должность</span>
+                    <input class="field__input" type="text" name="dignitary_office" value="{{ .dignitary.Office }}">
+                </label>
+                <label class="field">
+                    <span class="field__label">Краткое описание</span>
+                    <textarea class="field__input field__input--area" name="dignitary_description">{{ .dignitary.Description }}</textarea>
+                </label>
+            </section>
+
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Годы в должности</h2>
+                <p class="draft-form__hint">Годы до н.э. указываются со знаком минус</p>
+                <div class="field-row">
+                    <label class="field">
+                        <span class="field__label">Год начала</span>
+                        <input class="field__input" type="number" name="office_start" value="{{ .dignitary.OfficeStart }}">
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Год окончания</span>
+                        <input class="field__input" type="number" name="office_end" value="{{ .dignitary.OfficeEnd }}">
+                    </label>
+                </div>
+            </section>
+
+            <button class="button button--primary" type="button">Опубликовать</button>
+        </form>
+    </main>
+    {{ template "tabbar" "draft" }}
+</div>
+</body>
+</html>

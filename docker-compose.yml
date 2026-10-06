@@ -1,0 +1,33 @@
+services:
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: dignitaries-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # веб-консоль
+    volumes:
+      - miniodata:/data
+
+  # Создаёт публичный бакет dignitaries и загружает в него файлы из ./media
+  # (отдельный образ mc больше не публикуется, mc есть внутри образа сервера)
+  minio-init:
+    image: quay.io/minio/minio:latest
+    depends_on:
+      - minio
+    volumes:
+      - ./media:/media
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadminpassword; do sleep 1; done;
+      mc mb --ignore-existing local/dignitaries;
+      mc anonymous set download local/dignitaries;
+      mc cp --recursive /media/ local/dignitaries/;
+      exit 0;
+      "
+
+volumes:
+  miniodata:
