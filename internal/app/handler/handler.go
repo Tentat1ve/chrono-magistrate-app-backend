@@ -1,110 +1,82 @@
 package handler
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
-	"strconv"
+	"time"
 
 	"awesomeProject/internal/app/repository"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
+
+// Фото и видео по умолчанию хранятся на SSR-сервере вместе с иконками
+const (
+	defaultImageURL = "/static/img/default_dignitary.svg"
+	defaultVideoURL = "/static/img/default_dignitary.mp4"
+)
+
+// currentUserID — текущий пользователь (создатель) до появления авторизации
+const currentUserID uint = 1
 
 type Handler struct {
 	Repository *repository.Repository
+	minioURL   string
+	httpClient *http.Client
 }
 
-func NewHandler(r *repository.Repository) *Handler {
-	return &Handler{Repository: r}
-}
-
-// DignitaryView — данные сановника для шаблона: ссылки на Minio и число лайков
-type DignitaryView struct {
-	repository.Dignitary
-	ImageURL   string
-	VideoURL   string
-	LikesCount int
-}
-
-func (h *Handler) toView(d repository.Dignitary) DignitaryView {
-	return DignitaryView{
-		Dignitary:  d,
-		ImageURL:   h.Repository.MediaURL(d.ImageKey),
-		VideoURL:   h.Repository.MediaURL(d.VideoKey),
-		LikesCount: len(d.LikedBy), // количество лайков вычисляется по коллекции
+func NewHandler(r *repository.Repository, minioURL string) *Handler {
+	return &Handler{
+		Repository: r,
+		minioURL:   minioURL,
+		httpClient: &http.Client{Timeout: 700 * time.Millisecond},
 	}
 }
 
-// GetDignitaries — страница «плитка»: GET /dignitaries?office_year=1570
-func (h *Handler) GetDignitaries(ctx *gin.Context) {
-	yearQuery := ctx.Query("office_year")
-
-	var year *int
-	if yearQuery != "" {
-		y, err := strconv.Atoi(yearQuery)
-		if err != nil {
-			logrus.Error(err)
-		} else {
-			year = &y
-		}
-	}
-
-	var views []DignitaryView
-	for _, d := range h.Repository.GetDignitaries(year) {
-		views = append(views, h.toView(d))
-	}
-
-	ctx.HTML(http.StatusOK, "dignitaries.html", gin.H{
-		"dignitaries": views,
-		"officeYear":  yearQuery,
-	})
+func (h *Handler) RegisterHandler(router *gin.Engine) {
+	router.GET("/dignitaries", h.GetDignitaries)
+	router.GET("/dignitary_feed", h.GetDignitaryFeed)
+	router.GET("/dignitary_feed/:id", h.GetDignitaryFeed)
+	router.GET("/dignitary_draft", h.GetDignitaryDraft)
+	router.POST("/dignitary_draft", h.CreateDignitaryDraft)
+	router.POST("/dignitary_draft/publish", h.PublishDignitaryDraft)
+	router.POST("/dignitaries/:id/delete", h.DeleteDignitary)
 }
 
-// GetDignitaryFeed — страница «лента»: GET /dignitary_feed, /dignitary_feed/:id, /dignitary_feed/:id?next=true
-func (h *Handler) GetDignitaryFeed(ctx *gin.Context) {
-	var (
-		dignitary repository.Dignitary
-		err       error
-	)
+func (h *Handler) RegisterStatic(router *gin.Engine) {
+	router.SetFuncMap(template.FuncMap{"formatYear": formatYear})
+	router.LoadHTMLGlob("templates/*")
+	router.Static("/static", "./static")
+}
 
-	idStr := ctx.Param("id")
-	if idStr == "" {
-		dignitary, err = h.Repository.GetFirstDignitary()
-	} else {
-		id, convErr := strconv.Atoi(idStr)
-		if convErr != nil {
-			logrus.Error(convErr)
-			ctx.String(http.StatusBadRequest, "некорректный id")
-			return
-		}
-		if ctx.Query("next") == "true" {
-			dignitary, err = h.Repository.GetNextDignitary(id)
-		} else {
-			dignitary, err = h.Repository.GetDignitary(id)
-		}
+// formatYear выводит год с учётом эры: -63 → «63 г. до н.э.», 1565 → «1565 г.»
+func formatYear(year *int) string {
+	if year == nil {
+		return "—"
 	}
+	if *year < 0 {
+		return fmt.Sprintf("%d г. до н.э.", -*year)
+	}
+	return fmt.Sprintf("%d г.", *year)
+}
 
+// mediaURL возвращает url, если файл по нему доступен, иначе url файла по умолчанию
+func (h *Handler) mediaURL(url, fallback string) string {
+	if url == "" {
+		return fallback
+	}
+	resp, err := h.httpClient.Head(url)
 	if err != nil {
-		logrus.Error(err)
-		ctx.String(http.StatusNotFound, err.Error())
-		return
+		return fallback
 	}
-
-	ctx.HTML(http.StatusOK, "dignitary_feed.html", gin.H{
-		"dignitary": h.toView(dignitary),
-	})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fallback
+	}
+	return url
 }
 
-// GetDignitaryDraft — страница «добавление»: GET /dignitary_draft
-func (h *Handler) GetDignitaryDraft(ctx *gin.Context) {
-	draft, err := h.Repository.GetDraftDignitary()
-	if err != nil {
-		logrus.Error(err)
-		ctx.String(http.StatusNotFound, err.Error())
-		return
-	}
-
-	ctx.HTML(http.StatusOK, "dignitary_draft.html", gin.H{
-		"dignitary": h.toView(draft),
-	})
+func (h *Handler) errorPage(ctx *gin.Context, status int, message string) {
+	ctx.HTML(status, "error.html", gin.H{"status": status, "message": message})
 }

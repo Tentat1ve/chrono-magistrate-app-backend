@@ -9,12 +9,12 @@
 <body>
 <div class="phone">
     <main class="feed">
-        <video class="feed__video" src="{{ .dignitary.VideoURL }}" poster="{{ .dignitary.ImageURL }}"
+        <video class="feed__video" src="{{ .dignitary.VideoSrc }}" poster="{{ .dignitary.ImageSrc }}"
                autoplay muted loop playsinline></video>
 
         <div class="feed__info">
             <div class="feed__author">
-                <img class="feed__avatar" src="{{ .dignitary.ImageURL }}" alt="{{ .dignitary.Name }}">
+                <img class="feed__avatar" src="{{ .dignitary.ImageSrc }}" alt="{{ .dignitary.Name }}">
                 <span class="feed__office">{{ .dignitary.Office }}</span>
             </div>
             <h1 class="feed__title">{{ .dignitary.Name }}</h1>

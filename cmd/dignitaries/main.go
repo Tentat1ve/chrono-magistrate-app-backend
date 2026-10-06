@@ -1,21 +1,29 @@
 package main
 
 import (
-	"log"
-	"os"
+	"awesomeProject/internal/app/config"
+	"awesomeProject/internal/app/dsn"
+	"awesomeProject/internal/app/handler"
+	"awesomeProject/internal/app/repository"
+	"awesomeProject/internal/pkg"
 
-	"awesomeProject/internal/api"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	log.Println("Application start!")
+	logrus.Info("Application start!")
 
-	// Публичный адрес бакета Minio, из которого браузер загружает изображения и видео
-	minioURL := os.Getenv("MINIO_PUBLIC_URL")
-	if minioURL == "" {
-		minioURL = "http://localhost:9000/dignitaries"
+	cfg := config.NewConfig()
+
+	repo, err := repository.New(dsn.FromEnv())
+	if err != nil {
+		logrus.Fatalf("ошибка подключения к БД: %v", err)
 	}
 
-	api.StartServer(minioURL)
-	log.Println("Application terminated!")
+	h := handler.NewHandler(repo, cfg.MinioPublicURL)
+	app := pkg.NewApp(cfg, gin.Default(), h)
+	app.RunApp()
+
+	logrus.Info("Application terminated!")
 }

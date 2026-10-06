@@ -1,4 +1,24 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: dignitaries-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432" # 5433 снаружи: 5432 занят локальным PostgreSQL
+    volumes:
+      - dignitaries_pgdata:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:latest
+    container_name: dignitaries-adminer
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
+
   minio:
     image: quay.io/minio/minio:latest
     container_name: dignitaries-minio
@@ -30,4 +50,5 @@ services:
       "
 
 volumes:
+  dignitaries_pgdata:
   miniodata:

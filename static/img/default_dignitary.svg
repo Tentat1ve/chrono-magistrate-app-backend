@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#F4ECD8"/>
+  <rect x="30" y="30" width="540" height="740" fill="none" stroke="#C9A227" stroke-width="6" rx="18"/>
+  <circle cx="300" cy="300" r="110" fill="#E2D5B8"/>
+  <path d="M120 620c0-110 80-190 180-190s180 80 180 190z" fill="#E2D5B8"/>
+  <path d="M215 220l25-55 30 40 30-55 30 55 30-40 25 55z" fill="#C9A227"/>
+  <text x="300" y="705" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#7B1E1E">Сановник</text>
+</svg>

@@ -11,20 +11,47 @@
     <main class="page">
         <h1 class="page__title">Новый сановник</h1>
 
-        <form class="draft-form">
+        {{ if .error }}<p class="form-error">{{ .error }}</p>{{ end }}
+
+        {{ if not .draft }}
+        <!-- Шаг 1: черновика нет. Форма без multipart — на сервер уходят только имена файлов -->
+        <form class="draft-form" action="/dignitary_draft" method="POST">
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Медиа</h2>
+                <label class="field">
+                    <span class="field__label">Изображение</span>
+                    <input class="field__input" type="file" name="dignitary_image" accept="image/*">
+                </label>
+                <label class="field">
+                    <span class="field__label">Короткое видео</span>
+                    <input class="field__input" type="file" name="dignitary_video" accept="video/*">
+                </label>
+            </section>
+
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Название</h2>
+                <label class="field">
+                    <span class="field__label">Имя сановника</span>
+                    <input class="field__input" type="text" name="dignitary_name" required maxlength="255">
+                </label>
+            </section>
+
+            <button class="button button--primary" type="submit">Далее</button>
+        </form>
+        {{ else }}
+        <!-- Шаг 2: черновик есть — заполненные поля и публикация -->
+        <form class="draft-form" action="/dignitary_draft/publish" method="POST">
             <section class="draft-form__section">
                 <h2 class="draft-form__section-title">Медиа</h2>
                 <div class="draft-form__media">
-                    <label class="draft-form__media-item">
-                        <img class="draft-form__preview" src="{{ .dignitary.ImageURL }}" alt="{{ .dignitary.Name }}">
-                        <span class="draft-form__caption">Изображение · {{ .dignitary.ImageKey }}</span>
-                        <input type="file" name="dignitary_image" accept="image/*">
-                    </label>
-                    <label class="draft-form__media-item">
-                        <video class="draft-form__preview" src="{{ .dignitary.VideoURL }}" muted playsinline></video>
-                        <span class="draft-form__caption">Видео · {{ .dignitary.VideoKey }}</span>
-                        <input type="file" name="dignitary_video" accept="video/*">
-                    </label>
+                    <div class="draft-form__media-item">
+                        <img class="draft-form__preview" src="{{ .draft.ImageSrc }}" alt="{{ .draft.Name }}">
+                        <span class="draft-form__caption">Изображение</span>
+                    </div>
+                    <div class="draft-form__media-item">
+                        <video class="draft-form__preview" src="{{ .draft.VideoSrc }}" muted autoplay loop playsinline></video>
+                        <span class="draft-form__caption">Видео</span>
+                    </div>
                 </div>
             </section>
 
@@ -32,15 +59,15 @@
                 <h2 class="draft-form__section-title">Описание</h2>
                 <label class="field">
                     <span class="field__label">Имя сановника</span>
-                    <input class="field__input" type="text" name="dignitary_name" value="{{ .dignitary.Name }}">
+                    <input class="field__input" type="text" value="{{ .draft.Name }}" disabled>
                 </label>
                 <label class="field">
                     <span class="field__label">Должность</span>
-                    <input class="field__input" type="text" name="dignitary_office" value="{{ .dignitary.Office }}">
+                    <input class="field__input" type="text" name="dignitary_office" value="{{ .draft.Office }}" required maxlength="255">
                 </label>
                 <label class="field">
                     <span class="field__label">Краткое описание</span>
-                    <textarea class="field__input field__input--area" name="dignitary_description">{{ .dignitary.Description }}</textarea>
+                    <textarea class="field__input field__input--area" name="dignitary_description" required>{{ .draft.Description }}</textarea>
                 </label>
             </section>
 
@@ -50,17 +77,20 @@
                 <div class="field-row">
                     <label class="field">
                         <span class="field__label">Год начала</span>
-                        <input class="field__input" type="number" name="office_start" value="{{ .dignitary.OfficeStart }}">
+                        <input class="field__input" type="number" name="office_start" required
+                               value="{{ with .draft.OfficeStart }}{{ . }}{{ end }}">
                     </label>
                     <label class="field">
                         <span class="field__label">Год окончания</span>
-                        <input class="field__input" type="number" name="office_end" value="{{ .dignitary.OfficeEnd }}">
+                        <input class="field__input" type="number" name="office_end" required
+                               value="{{ with .draft.OfficeEnd }}{{ . }}{{ end }}">
                     </label>
                 </div>
             </section>
 
-            <button class="button button--primary" type="button">Опубликовать</button>
+            <button class="button button--primary" type="submit">Опубликовать</button>
         </form>
+        {{ end }}
     </main>
     {{ template "tabbar" "draft" }}
 </div>

@@ -19,14 +19,21 @@
 
         <div class="tiles">
             {{ range .dignitaries }}
-            <a class="tile" href="/dignitary_feed/{{ .ID }}">
-                <img class="tile__image" src="{{ .ImageURL }}" alt="{{ .Name }}">
-                <div class="tile__body">
-                    <h2 class="tile__name">{{ .Name }}</h2>
-                    <div class="tile__years">{{ formatYear .OfficeStart }} — {{ formatYear .OfficeEnd }}</div>
-                    <div class="tile__likes">♥ {{ .LikesCount }}</div>
+            <article class="tile">
+                <a class="tile__link" href="/dignitary_feed/{{ .ID }}">
+                    <img class="tile__image" src="{{ .ImageSrc }}" alt="{{ .Name }}">
+                    <div class="tile__body">
+                        <h2 class="tile__name">{{ .Name }}</h2>
+                        <div class="tile__years">{{ formatYear .OfficeStart }} — {{ formatYear .OfficeEnd }}</div>
+                    </div>
+                </a>
+                <div class="tile__footer">
+                    <span class="tile__likes">♥ {{ .LikesCount }}</span>
+                    <form action="/dignitaries/{{ .ID }}/delete" method="POST">
+                        <button class="tile__delete" type="submit" title="Удалить">Удалить</button>
+                    </form>
                 </div>
-            </a>
+            </article>
             {{ else }}
             <p class="tiles__empty">Сановники не найдены</p>
             {{ end }}
