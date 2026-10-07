@@ -2,216 +2,290 @@ package handler
 
 import (
 	"errors"
+	"mime/multipart"
 	"net/http"
-	"path"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"awesomeProject/internal/app/ds"
 	"awesomeProject/internal/app/repository"
+	"awesomeProject/internal/app/serializer"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
-// DignitaryView — данные сановника для шаблона: проверенные ссылки на медиа и число лайков
-type DignitaryView struct {
-	ds.Dignitary
-	ImageSrc   string
-	VideoSrc   string
-	LikesCount int
-}
+const (
+	maxImageSize = 10 << 20 // 10 МБ
+	maxVideoSize = 50 << 20 // 50 МБ
+)
 
-func (h *Handler) toView(d ds.Dignitary) DignitaryView {
-	return DignitaryView{
-		Dignitary:  d,
-		ImageSrc:   h.mediaURL(d.ImageURL, defaultImageURL),
-		VideoSrc:   h.mediaURL(d.VideoURL, defaultVideoURL),
-		LikesCount: len(d.Likes),
-	}
-}
-
-// GetDignitaries — страница «плитка»: GET /dignitaries?office_year=1570
+// GetDignitaries — GET /api/dignitaries?office_year=1570&name=паша
+// Список опубликованных сановников с признаком is_creator.
 func (h *Handler) GetDignitaries(ctx *gin.Context) {
-	yearQuery := ctx.Query("office_year")
-
-	var year *int
-	if yearQuery != "" {
-		y, err := strconv.Atoi(yearQuery)
-		if err != nil {
-			logrus.Error(err)
-		} else {
-			year = &y
-		}
-	}
-
-	dignitaries, err := h.Repository.GetDignitaries(year)
+	user, err := h.CurrentUser()
 	if err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось получить список сановников")
+		h.internalError(ctx, err)
 		return
 	}
 
-	views := make([]DignitaryView, 0, len(dignitaries))
-	for _, d := range dignitaries {
-		views = append(views, h.toView(d))
+	var year *int
+	if yearQuery := ctx.Query("office_year"); yearQuery != "" {
+		y, err := strconv.Atoi(yearQuery)
+		if err != nil {
+			h.errorJSON(ctx, http.StatusBadRequest, "office_year должен быть целым числом (до н.э. — отрицательным)")
+			return
+		}
+		year = &y
 	}
 
-	ctx.HTML(http.StatusOK, "dignitaries.html", gin.H{
-		"dignitaries": views,
-		"officeYear":  yearQuery,
-	})
+	dignitaries, err := h.Repository.GetDignitaries(year, strings.TrimSpace(ctx.Query("name")))
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+
+	result := make([]serializer.DignitaryListItemJSON, 0, len(dignitaries))
+	for _, d := range dignitaries {
+		result = append(result, serializer.DignitaryToListItem(d, user.ID))
+	}
+	ctx.JSON(http.StatusOK, result)
 }
 
-// GetDignitaryFeed — страница «лента»: GET /dignitary_feed, /dignitary_feed/:id, /dignitary_feed/:id?next=true
+// GetDignitaryFeed — GET /api/dignitaries/feed, /api/dignitaries/feed/:id, /api/dignitaries/feed/:id?next=true
+// Один опубликованный сановник с признаком is_liked.
 func (h *Handler) GetDignitaryFeed(ctx *gin.Context) {
-	var (
-		dignitary ds.Dignitary
-		err       error
-	)
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
 
-	idStr := ctx.Param("id")
-	if idStr == "" {
+	var dignitary ds.Dignitary
+	if idStr := ctx.Param("id"); idStr == "" {
 		dignitary, err = h.Repository.GetNextDignitary(0)
 	} else {
-		id, convErr := strconv.ParseUint(idStr, 10, 64)
-		if convErr != nil {
-			h.errorPage(ctx, http.StatusBadRequest, "Некорректный id сановника")
+		id, ok := h.parseID(ctx)
+		if !ok {
 			return
 		}
 		if ctx.Query("next") == "true" {
-			dignitary, err = h.Repository.GetNextDignitary(uint(id))
+			dignitary, err = h.Repository.GetNextDignitary(id)
 		} else {
-			dignitary, err = h.Repository.GetDignitary(uint(id))
+			dignitary, err = h.Repository.GetDignitary(id)
 		}
 	}
 
 	if errors.Is(err, repository.ErrNotFound) {
-		h.errorPage(ctx, http.StatusNotFound, "Сановник не найден или удалён")
+		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
 		return
 	}
 	if err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось получить сановника")
+		h.internalError(ctx, err)
 		return
 	}
-
-	ctx.HTML(http.StatusOK, "dignitary_feed.html", gin.H{
-		"dignitary": h.toView(dignitary),
-	})
+	ctx.JSON(http.StatusOK, serializer.DignitaryToFeed(dignitary, user.ID))
 }
 
-// GetDignitaryDraft — страница «добавление»: GET /dignitary_draft.
-// Если черновика нет — форма создания (название, фото, видео, «Далее»),
-// если есть — заполненная форма публикации.
+// GetDignitaryDraft — GET /api/dignitaries/draft — черновик текущего пользователя
 func (h *Handler) GetDignitaryDraft(ctx *gin.Context) {
-	h.renderDraft(ctx, http.StatusOK, "")
-}
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
 
-func (h *Handler) renderDraft(ctx *gin.Context, status int, formError string) {
-	draft, err := h.Repository.GetDraftDignitary(currentUserID)
+	draft, err := h.Repository.GetDraftDignitary(user.ID)
 	if errors.Is(err, repository.ErrNotFound) {
-		ctx.HTML(status, "dignitary_draft.html", gin.H{"error": formError})
+		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
 		return
 	}
 	if err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось получить черновик")
+		h.internalError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, serializer.DignitaryToJSON(draft))
+}
+
+// CreateDignitary — POST /api/dignitaries (multipart/form-data: name, image, video)
+// Создаёт черновик; файлы сохраняются в Minio под сгенерированными латинскими именами.
+func (h *Handler) CreateDignitary(ctx *gin.Context) {
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
 		return
 	}
 
-	ctx.HTML(status, "dignitary_draft.html", gin.H{
-		"draft": h.toView(draft),
-		"error": formError,
+	name := strings.TrimSpace(ctx.PostForm("name"))
+	if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 255 {
+		h.errorJSON(ctx, http.StatusBadRequest, "укажите name в UTF-8 (до 255 символов)")
+		return
+	}
+	image, ok := h.formFile(ctx, "image", "image/", maxImageSize)
+	if !ok {
+		return
+	}
+	video, ok := h.formFile(ctx, "video", "video/", maxVideoSize)
+	if !ok {
+		return
+	}
+
+	if _, err := h.Repository.GetDraftDignitary(user.ID); err == nil {
+		h.errorJSON(ctx, http.StatusConflict, "у пользователя уже есть черновик")
+		return
+	}
+
+	imageURL, err := h.upload(ctx, "dignitary_image", image)
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+	videoURL, err := h.upload(ctx, "dignitary_video", video)
+	if err != nil {
+		h.Repository.RemoveFile(ctx, imageURL)
+		h.internalError(ctx, err)
+		return
+	}
+
+	dignitary := ds.Dignitary{Name: name, ImageURL: imageURL, VideoURL: videoURL, CreatorID: user.ID}
+	if err := h.Repository.CreateDraftDignitary(&dignitary); err != nil {
+		h.Repository.RemoveFile(ctx, imageURL)
+		h.Repository.RemoveFile(ctx, videoURL)
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			h.errorJSON(ctx, http.StatusConflict, "у пользователя уже есть черновик")
+			return
+		}
+		h.internalError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, serializer.DignitaryToJSON(dignitary))
+}
+
+// formFile достаёт файл из формы и проверяет тип и размер
+func (h *Handler) formFile(ctx *gin.Context, field, typePrefix string, maxSize int64) (*multipart.FileHeader, bool) {
+	file, err := ctx.FormFile(field)
+	if err != nil {
+		h.errorJSON(ctx, http.StatusBadRequest, "прикрепите файл "+field)
+		return nil, false
+	}
+	if !strings.HasPrefix(file.Header.Get("Content-Type"), typePrefix) {
+		h.errorJSON(ctx, http.StatusBadRequest, "файл "+field+" должен иметь тип "+typePrefix+"*")
+		return nil, false
+	}
+	if file.Size > maxSize {
+		h.errorJSON(ctx, http.StatusRequestEntityTooLarge, "файл "+field+" слишком большой")
+		return nil, false
+	}
+	return file, true
+}
+
+func (h *Handler) upload(ctx *gin.Context, prefix string, file *multipart.FileHeader) (string, error) {
+	f, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	return h.Repository.UploadFile(ctx, prefix, file.Filename, file.Header.Get("Content-Type"), f, file.Size)
+}
+
+// PublishDignitaryDraft — PUT /api/dignitaries/draft/publish
+// Заполняет поля черновика и меняет статус на «опубликован».
+func (h *Handler) PublishDignitaryDraft(ctx *gin.Context) {
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+
+	var req serializer.PublishDignitaryRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		h.errorJSON(ctx, http.StatusBadRequest, "заполните office, description, office_start и office_end")
+		return
+	}
+	if *req.OfficeStart > *req.OfficeEnd {
+		h.errorJSON(ctx, http.StatusBadRequest, "office_start не может быть больше office_end")
+		return
+	}
+
+	dignitary, err := h.Repository.PublishDignitary(user.ID, strings.TrimSpace(req.Office),
+		strings.TrimSpace(req.Description), *req.OfficeStart, *req.OfficeEnd)
+	if errors.Is(err, repository.ErrNotFound) {
+		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
+		return
+	}
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, serializer.DignitaryToJSON(dignitary))
+}
+
+// DeleteDignitary — DELETE /api/dignitaries/:id — логическое удаление своего сановника
+func (h *Handler) DeleteDignitary(ctx *gin.Context) {
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+	id, ok := h.parseID(ctx)
+	if !ok {
+		return
+	}
+
+	err = h.Repository.DeleteDignitary(id, user.ID)
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
+	case errors.Is(err, repository.ErrForbidden):
+		h.errorJSON(ctx, http.StatusForbidden, "удалять можно только своих сановников")
+	case err != nil:
+		h.internalError(ctx, err)
+	default:
+		ctx.JSON(http.StatusOK, gin.H{"status": "ok", "deleted_id": id})
+	}
+}
+
+// LikeDignitary — POST /api/dignitaries/:id/like, тело {"liked": 1} или {"liked": 0}
+func (h *Handler) LikeDignitary(ctx *gin.Context) {
+	user, err := h.CurrentUser()
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+	id, ok := h.parseID(ctx)
+	if !ok {
+		return
+	}
+
+	var req serializer.LikeRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		h.errorJSON(ctx, http.StatusBadRequest, "поле liked должно быть 0 или 1")
+		return
+	}
+
+	dignitary, err := h.Repository.SetLike(id, user.ID, *req.Liked == 1)
+	if errors.Is(err, repository.ErrNotFound) {
+		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
+		return
+	}
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, serializer.LikeResponse{
+		DignitaryID: dignitary.ID,
+		IsLiked:     *req.Liked,
+		LikesCount:  len(dignitary.Likes),
 	})
 }
 
-// CreateDignitaryDraft — кнопка «Далее»: POST /dignitary_draft.
-// Файлы на сервер не передаются: форма отправляет только имена файлов,
-// из которых формируются (неверные) url в Minio.
-func (h *Handler) CreateDignitaryDraft(ctx *gin.Context) {
-	if _, err := h.Repository.GetDraftDignitary(currentUserID); err == nil {
-		ctx.Redirect(http.StatusSeeOther, "/dignitary_draft")
-		return
-	}
-
-	name := strings.TrimSpace(ctx.PostForm("dignitary_name"))
-	if name == "" {
-		h.renderDraft(ctx, http.StatusBadRequest, "Укажите имя сановника")
-		return
-	}
-
-	imageURL := h.uploadedFileURL(ctx.PostForm("dignitary_image"))
-	videoURL := h.uploadedFileURL(ctx.PostForm("dignitary_video"))
-
-	if err := h.Repository.CreateDraftDignitary(currentUserID, name, imageURL, videoURL); err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось создать черновик")
-		return
-	}
-
-	ctx.Redirect(http.StatusSeeOther, "/dignitary_draft")
-}
-
-func (h *Handler) uploadedFileURL(fileName string) string {
-	fileName = path.Base(strings.ReplaceAll(fileName, "\\", "/"))
-	if fileName == "" || fileName == "." || fileName == "/" {
-		return ""
-	}
-	return h.minioURL + "/" + fileName
-}
-
-// PublishDignitaryDraft — кнопка «Опубликовать»: POST /dignitary_draft/publish
-func (h *Handler) PublishDignitaryDraft(ctx *gin.Context) {
-	office := strings.TrimSpace(ctx.PostForm("dignitary_office"))
-	description := strings.TrimSpace(ctx.PostForm("dignitary_description"))
-	officeStart, errStart := strconv.Atoi(ctx.PostForm("office_start"))
-	officeEnd, errEnd := strconv.Atoi(ctx.PostForm("office_end"))
-
-	switch {
-	case office == "" || description == "":
-		h.renderDraft(ctx, http.StatusBadRequest, "Заполните должность и краткое описание")
-		return
-	case errStart != nil || errEnd != nil:
-		h.renderDraft(ctx, http.StatusBadRequest, "Укажите годы начала и окончания пребывания в должности")
-		return
-	case officeStart > officeEnd:
-		h.renderDraft(ctx, http.StatusBadRequest, "Год начала не может быть позже года окончания")
-		return
-	}
-
-	err := h.Repository.PublishDignitary(currentUserID, office, description, officeStart, officeEnd)
-	if errors.Is(err, repository.ErrNotFound) {
-		ctx.Redirect(http.StatusSeeOther, "/dignitary_draft")
-		return
-	}
-	if err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось опубликовать сановника")
-		return
-	}
-
-	ctx.Redirect(http.StatusSeeOther, "/dignitaries")
-}
-
-// DeleteDignitary — логическое удаление: POST /dignitaries/:id/delete
-func (h *Handler) DeleteDignitary(ctx *gin.Context) {
+func (h *Handler) parseID(ctx *gin.Context) (uint, bool) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
-	if err != nil {
-		h.errorPage(ctx, http.StatusBadRequest, "Некорректный id сановника")
-		return
+	if err != nil || id == 0 {
+		h.errorJSON(ctx, http.StatusBadRequest, "некорректный id")
+		return 0, false
 	}
-
-	err = h.Repository.DeleteDignitary(uint(id))
-	if errors.Is(err, repository.ErrNotFound) {
-		h.errorPage(ctx, http.StatusNotFound, "Сановник не найден или уже удалён")
-		return
-	}
-	if err != nil {
-		logrus.Error(err)
-		h.errorPage(ctx, http.StatusInternalServerError, "Не удалось удалить сановника")
-		return
-	}
-
-	ctx.Redirect(http.StatusSeeOther, "/dignitaries")
+	return uint(id), true
 }

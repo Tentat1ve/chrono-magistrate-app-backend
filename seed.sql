@@ -1,12 +1,13 @@
 -- Начальные данные. Выполнить в Adminer: «SQL-запрос» → вставить файл → «Выполнить»
--- (после go run ./cmd/migrate)
+-- (после go run ./cmd/migrate). Пароль всех пользователей: password123
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-INSERT INTO users (id, login, full_name, created_at) VALUES
-    (1, 'tentative', 'Тентатив (создатель)', now()),
-    (2, 'historian', 'Историк', now()),
-    (3, 'chronicler', 'Летописец', now()),
-    (4, 'archivist', 'Архивариус', now()),
-    (5, 'student', 'Студент', now());
+INSERT INTO users (id, login, full_name, password_hash, created_at) VALUES
+    (1, 'tentative', 'Тентатив (создатель)', crypt('password123', gen_salt('bf', 10)), now()),
+    (2, 'historian', 'Историк', crypt('password123', gen_salt('bf', 10)), now()),
+    (3, 'chronicler', 'Летописец', crypt('password123', gen_salt('bf', 10)), now()),
+    (4, 'archivist', 'Архивариус', crypt('password123', gen_salt('bf', 10)), now()),
+    (5, 'student', 'Студент', crypt('password123', gen_salt('bf', 10)), now());
 SELECT setval('users_id_seq', (SELECT max(id) FROM users));
 
 INSERT INTO dignitaries (id, name, office, description, status, image_url, video_url,

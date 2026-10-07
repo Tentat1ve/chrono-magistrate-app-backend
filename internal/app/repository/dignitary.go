@@ -1,9 +1,7 @@
 package repository
 
 import (
-	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"awesomeProject/internal/app/ds"
@@ -11,19 +9,25 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrNotFound = errors.New("запись не найдена")
+var (
+	ErrNotFound      = errors.New("запись не найдена")
+	ErrAlreadyExists = errors.New("запись уже существует")
+	ErrForbidden     = errors.New("нет прав на операцию")
+)
 
 // publishedWithLikes — опубликованные сановники вместе с лайками
 func (r *Repository) publishedWithLikes() *gorm.DB {
 	return r.db.Preload("Likes").Where("status = ?", ds.DignitaryStatusPublished)
 }
 
-// GetDignitaries — опубликованные сановники; при year != nil только те,
-// кто находился в должности в этом году (ORM)
-func (r *Repository) GetDignitaries(year *int) ([]ds.Dignitary, error) {
+// GetDignitaries — опубликованные сановники; фильтры: год пребывания в должности и часть имени
+func (r *Repository) GetDignitaries(year *int, name string) ([]ds.Dignitary, error) {
 	query := r.publishedWithLikes()
 	if year != nil {
 		query = query.Where("office_start <= ? AND office_end >= ?", *year, *year)
+	}
+	if name != "" {
+		query = query.Where("name ILIKE ?", "%"+name+"%")
 	}
 
 	var dignitaries []ds.Dignitary
@@ -33,15 +37,14 @@ func (r *Repository) GetDignitaries(year *int) ([]ds.Dignitary, error) {
 	return dignitaries, nil
 }
 
-// GetDignitary — опубликованный сановник по ID, из БД возвращается одна строка (ORM)
+// GetDignitary — опубликованный сановник по ID
 func (r *Repository) GetDignitary(id uint) (ds.Dignitary, error) {
 	var dignitary ds.Dignitary
 	err := r.publishedWithLikes().Where("id = ?", id).First(&dignitary).Error
 	return dignitary, wrapNotFound(err)
 }
 
-// GetNextDignitary — следующий опубликованный сановник после ID,
-// после последнего — снова первый (ORM, одна строка из БД)
+// GetNextDignitary — следующий опубликованный сановник после ID, после последнего — снова первый
 func (r *Repository) GetNextDignitary(id uint) (ds.Dignitary, error) {
 	var dignitary ds.Dignitary
 	err := r.publishedWithLikes().Where("id > ?", id).Order("id").First(&dignitary).Error
@@ -51,34 +54,35 @@ func (r *Repository) GetNextDignitary(id uint) (ds.Dignitary, error) {
 	return dignitary, wrapNotFound(err)
 }
 
-// GetDraftDignitary — черновик пользователя (не более одного) (ORM)
+// GetDraftDignitary — черновик пользователя (не более одного)
 func (r *Repository) GetDraftDignitary(creatorID uint) (ds.Dignitary, error) {
 	var dignitary ds.Dignitary
 	err := r.db.Where("creator_id = ? AND status = ?", creatorID, ds.DignitaryStatusDraft).First(&dignitary).Error
 	return dignitary, wrapNotFound(err)
 }
 
-// CreateDraftDignitary — создание черновика: название, url фото и видео (ORM)
-func (r *Repository) CreateDraftDignitary(creatorID uint, name, imageURL, videoURL string) error {
-	dignitary := ds.Dignitary{
-		Name:      name,
-		ImageURL:  imageURL,
-		VideoURL:  videoURL,
-		Status:    ds.DignitaryStatusDraft,
-		CreatorID: creatorID,
+// CreateDraftDignitary — создание черновика с url загруженных фото и видео
+func (r *Repository) CreateDraftDignitary(dignitary *ds.Dignitary) error {
+	if _, err := r.GetDraftDignitary(dignitary.CreatorID); err == nil {
+		return ErrAlreadyExists
 	}
-	return r.db.Create(&dignitary).Error
+	dignitary.Status = ds.DignitaryStatusDraft
+	err := r.db.Create(dignitary).Error
+	if isUniqueViolation(err) { // параллельный запрос успел создать черновик
+		return ErrAlreadyExists
+	}
+	return err
 }
 
-// PublishDignitary — заполнение полей черновика и смена статуса на «опубликован» (ORM)
-func (r *Repository) PublishDignitary(creatorID uint, office, description string, officeStart, officeEnd int) error {
+// PublishDignitary — заполнение полей черновика и смена статуса на «опубликован»
+func (r *Repository) PublishDignitary(creatorID uint, office, description string, officeStart, officeEnd int) (ds.Dignitary, error) {
 	draft, err := r.GetDraftDignitary(creatorID)
 	if err != nil {
-		return err
+		return ds.Dignitary{}, err
 	}
 
 	now := time.Now()
-	return r.db.Model(&draft).Updates(map[string]any{
+	err = r.db.Model(&draft).Updates(map[string]any{
 		"office":       office,
 		"description":  description,
 		"office_start": officeStart,
@@ -86,23 +90,42 @@ func (r *Repository) PublishDignitary(creatorID uint, office, description string
 		"status":       ds.DignitaryStatusPublished,
 		"published_at": &now,
 	}).Error
+	if err != nil {
+		return ds.Dignitary{}, err
+	}
+	return r.GetDignitary(draft.ID)
 }
 
-// DeleteDignitary — логическое удаление сановника SQL-запросом UPDATE без ORM (через курсор)
-func (r *Repository) DeleteDignitary(id uint) error {
-	query := "UPDATE dignitaries SET status = $1 WHERE id = $2 AND status = $3 RETURNING id"
-
-	// курсор на строку результата
-	row := r.db.Raw(query, ds.DignitaryStatusDeleted, id, ds.DignitaryStatusPublished).Row()
-
-	var deletedID uint
-	if err := row.Scan(&deletedID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("сановник id=%d: %w", id, ErrNotFound)
-		}
-		return err
+// DeleteDignitary — логическое удаление: только свои сановники в статусе черновик или опубликован
+func (r *Repository) DeleteDignitary(id, userID uint) error {
+	var dignitary ds.Dignitary
+	err := r.db.Where("id = ? AND status <> ?", id, ds.DignitaryStatusDeleted).First(&dignitary).Error
+	if err != nil {
+		return wrapNotFound(err)
 	}
-	return nil
+	if dignitary.CreatorID != userID {
+		return ErrForbidden
+	}
+	return r.db.Model(&dignitary).Update("status", ds.DignitaryStatusDeleted).Error
+}
+
+// SetLike ставит (liked = true) или снимает лайк пользователя у опубликованного сановника
+func (r *Repository) SetLike(dignitaryID, userID uint, liked bool) (ds.Dignitary, error) {
+	if _, err := r.GetDignitary(dignitaryID); err != nil {
+		return ds.Dignitary{}, err
+	}
+
+	like := ds.DignitaryLike{UserID: userID, DignitaryID: dignitaryID}
+	var err error
+	if liked {
+		err = r.db.Where(&like).FirstOrCreate(&like).Error
+	} else {
+		err = r.db.Where("user_id = ? AND dignitary_id = ?", userID, dignitaryID).Delete(&ds.DignitaryLike{}).Error
+	}
+	if err != nil {
+		return ds.Dignitary{}, err
+	}
+	return r.GetDignitary(dignitaryID)
 }
 
 func wrapNotFound(err error) error {

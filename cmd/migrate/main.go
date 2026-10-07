@@ -12,6 +12,7 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	logrus.Info("миграция схемы БД")
 
 	db, err := gorm.Open(postgres.Open(dsn.FromEnv()), &gorm.Config{})
 	if err != nil {

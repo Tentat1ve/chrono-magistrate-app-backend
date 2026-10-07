@@ -1,0 +1,124 @@
+{
+  "info": {
+    "name": "Сановники — ЛР3",
+    "description": "Запросы веб-сервиса «Определение года события по упоминанию сановников». В запросе «Добавление сановника» выберите файлы image и video.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api" }
+  ],
+  "item": [
+    {
+      "name": "1. Список сановников с фильтром",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/dignitaries?office_year=1570",
+          "host": ["{{baseUrl}}"],
+          "path": ["dignitaries"],
+          "query": [
+            { "key": "office_year", "value": "1570" },
+            { "key": "name", "value": "паша", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "2. Добавление сановника (черновик) с изображением и видео",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "name", "value": "Дмитрий Михайлович Пожарский", "type": "text" },
+            { "key": "image", "type": "file", "src": [] },
+            { "key": "video", "type": "file", "src": [] }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/dignitaries", "host": ["{{baseUrl}}"], "path": ["dignitaries"] }
+      }
+    },
+    {
+      "name": "3. Черновик текущего пользователя",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/dignitaries/draft", "host": ["{{baseUrl}}"], "path": ["dignitaries", "draft"] }
+      }
+    },
+    {
+      "name": "4. Публикация черновика",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"office\": \"Воевода Зарайска\",\n  \"description\": \"Князь, будущий руководитель Второго ополчения. В 1610–1611 годах воевода Зарайска.\",\n  \"office_start\": 1610,\n  \"office_end\": 1611\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/dignitaries/draft/publish", "host": ["{{baseUrl}}"], "path": ["dignitaries", "draft", "publish"] }
+      }
+    },
+    {
+      "name": "5. Лента без id",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/dignitaries/feed", "host": ["{{baseUrl}}"], "path": ["dignitaries", "feed"] }
+      }
+    },
+    {
+      "name": "6. Лента: следующий после id (?next=true)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/dignitaries/feed/1?next=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["dignitaries", "feed", "1"],
+          "query": [{ "key": "next", "value": "true" }]
+        }
+      }
+    },
+    {
+      "name": "7. Лайк сановнику",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"liked\": 1\n}" },
+        "url": { "raw": "{{baseUrl}}/dignitaries/4/like", "host": ["{{baseUrl}}"], "path": ["dignitaries", "4", "like"] }
+      }
+    },
+    {
+      "name": "8. Удаление сановника",
+      "request": {
+        "method": "DELETE",
+        "url": { "raw": "{{baseUrl}}/dignitaries/6", "host": ["{{baseUrl}}"], "path": ["dignitaries", "6"] }
+      }
+    },
+    {
+      "name": "9. Регистрация пользователя",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"login\": \"new_user\",\n  \"full_name\": \"Новый пользователь\",\n  \"password\": \"secret123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/users/register", "host": ["{{baseUrl}}"], "path": ["users", "register"] }
+      }
+    },
+    {
+      "name": "10. Аутентификация (заглушка)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"login\": \"new_user\",\n  \"password\": \"secret123\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
+      }
+    },
+    {
+      "name": "11. Деавторизация (заглушка)",
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/users/logout", "host": ["{{baseUrl}}"], "path": ["users", "logout"] }
+      }
+    }
+  ]
+}
