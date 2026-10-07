@@ -20,14 +20,11 @@ func (r *Repository) publishedWithLikes() *gorm.DB {
 	return r.db.Preload("Likes").Where("status = ?", ds.DignitaryStatusPublished)
 }
 
-// GetDignitaries — опубликованные сановники; фильтры: год пребывания в должности и часть имени
-func (r *Repository) GetDignitaries(year *int, name string) ([]ds.Dignitary, error) {
+// GetDignitaries — опубликованные сановники; фильтр по полям по теме: год пребывания в должности
+func (r *Repository) GetDignitaries(year *int) ([]ds.Dignitary, error) {
 	query := r.publishedWithLikes()
 	if year != nil {
 		query = query.Where("office_start <= ? AND office_end >= ?", *year, *year)
-	}
-	if name != "" {
-		query = query.Where("name ILIKE ?", "%"+name+"%")
 	}
 
 	var dignitaries []ds.Dignitary

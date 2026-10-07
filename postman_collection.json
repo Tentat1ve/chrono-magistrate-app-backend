@@ -17,8 +17,7 @@
           "host": ["{{baseUrl}}"],
           "path": ["dignitaries"],
           "query": [
-            { "key": "office_year", "value": "1570" },
-            { "key": "name", "value": "паша", "disabled": true }
+            { "key": "office_year", "value": "1570" }
           ]
         }
       }

@@ -20,7 +20,7 @@ const (
 	maxVideoSize = 50 << 20 // 50 МБ
 )
 
-// GetDignitaries — GET /api/dignitaries?office_year=1570&name=паша
+// GetDignitaries — GET /api/dignitaries?office_year=1570
 // Список опубликованных сановников с признаком is_creator.
 func (h *Handler) GetDignitaries(ctx *gin.Context) {
 	user, err := h.CurrentUser()
@@ -39,7 +39,7 @@ func (h *Handler) GetDignitaries(ctx *gin.Context) {
 		year = &y
 	}
 
-	dignitaries, err := h.Repository.GetDignitaries(year, strings.TrimSpace(ctx.Query("name")))
+	dignitaries, err := h.Repository.GetDignitaries(year)
 	if err != nil {
 		h.internalError(ctx, err)
 		return
