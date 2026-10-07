@@ -22,8 +22,8 @@ type Dignitary struct {
 	VideoURL    string     `gorm:"type:varchar(500)"`
 	OfficeStart *int       // поле по теме 1: год вступления в должность
 	OfficeEnd   *int       // поле по теме 2: год оставления должности
-	CreatedAt   time.Time  `gorm:"not null"`         // дата создания
-	PublishedAt *time.Time                           // дата формирования (публикации)
+	CreatedAt   time.Time  `gorm:"not null"` // дата создания
+	PublishedAt *time.Time // дата формирования (публикации)
 	CreatorID   uint       `gorm:"not null;uniqueIndex:idx_one_draft_per_creator"`
 	Creator     User       `gorm:"foreignKey:CreatorID;constraint:OnUpdate:RESTRICT,OnDelete:RESTRICT"`
 
