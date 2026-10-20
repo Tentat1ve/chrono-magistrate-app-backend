@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сановники</title>
+    <title>Плитка</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,25 +11,26 @@
     <main class="page">
         <h1 class="page__title">Сановники</h1>
 
-        <form class="search" action="/dignitaries" method="GET">
-            <input class="field__input search__input" type="number" name="office_year"
-                   value="{{ .officeYear }}" placeholder="Год в должности (−63 = 63 до н.э.)">
+        <!-- Фильтр на сервере: календарь и кнопка «Найти» -->
+        <form class="search" action="/dignitarie_lists/catalog" method="GET">
+            <input class="field__input search__input" type="date" name="date" value="{{ .date }}" title="Дата пребывания в должности">
             <button class="button button--primary search__button" type="submit">Найти</button>
         </form>
 
         <div class="tiles">
-            {{ range .dignitaries }}
+            {{ range .dignitarieLists }}
             <article class="tile">
-                <a class="tile__link" href="/dignitary_feed/{{ .ID }}">
+                <a class="tile__link" href="/dignitarie_lists/feed?id={{ .ID }}">
                     <img class="tile__image" src="{{ .ImageSrc }}" alt="{{ .Name }}">
                     <div class="tile__body">
                         <h2 class="tile__name">{{ .Name }}</h2>
-                        <div class="tile__years">{{ formatYear .OfficeStart }} — {{ formatYear .OfficeEnd }}</div>
                     </div>
                 </a>
                 <div class="tile__footer">
                     <span class="tile__likes">♥ {{ .LikesCount }}</span>
-                    <form action="/dignitaries/{{ .ID }}/delete" method="POST">
+                    <!-- логическое удаление: POST, SQL UPDATE без ORM -->
+                    <form action="/dignitarie_lists/delete" method="POST">
+                        <input type="hidden" name="id" value="{{ .ID }}">
                         <button class="tile__delete" type="submit" title="Удалить">Удалить</button>
                     </form>
                 </div>
@@ -39,7 +40,7 @@
             {{ end }}
         </div>
     </main>
-    {{ template "tabbar" "tiles" }}
+    {{ template "tabbar" "catalog" }}
 </div>
 </body>
 </html>

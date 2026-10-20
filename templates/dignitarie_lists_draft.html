@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Добавление сановника</title>
+    <title>Добавление</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -15,24 +15,24 @@
 
         {{ if not .draft }}
         <!-- Шаг 1: черновика нет. Форма без multipart — на сервер уходят только имена файлов -->
-        <form class="draft-form" action="/dignitary_draft" method="POST">
+        <form class="draft-form" action="/dignitarie_lists/draft" method="POST">
             <section class="draft-form__section">
-                <h2 class="draft-form__section-title">Медиа</h2>
+                <h2 class="draft-form__section-title">Фото и видео</h2>
                 <label class="field">
-                    <span class="field__label">Изображение</span>
-                    <input class="field__input" type="file" name="dignitary_image" accept="image/*">
+                    <span class="field__label">Фото</span>
+                    <input class="field__input" type="file" name="image" accept="image/*">
                 </label>
                 <label class="field">
-                    <span class="field__label">Короткое видео</span>
-                    <input class="field__input" type="file" name="dignitary_video" accept="video/*">
+                    <span class="field__label">Видео</span>
+                    <input class="field__input" type="file" name="video" accept="video/*">
                 </label>
             </section>
 
             <section class="draft-form__section">
                 <h2 class="draft-form__section-title">Название</h2>
                 <label class="field">
-                    <span class="field__label">Имя сановника</span>
-                    <input class="field__input" type="text" name="dignitary_name" required maxlength="255">
+                    <span class="field__label">Название</span>
+                    <input class="field__input" type="text" name="name" required maxlength="255">
                 </label>
             </section>
 
@@ -40,13 +40,13 @@
         </form>
         {{ else }}
         <!-- Шаг 2: черновик есть — заполненные поля и публикация -->
-        <form class="draft-form" action="/dignitary_draft/publish" method="POST">
+        <form class="draft-form" action="/dignitarie_lists/draft/publish" method="POST">
             <section class="draft-form__section">
-                <h2 class="draft-form__section-title">Медиа</h2>
+                <h2 class="draft-form__section-title">Фото и видео</h2>
                 <div class="draft-form__media">
                     <div class="draft-form__media-item">
                         <img class="draft-form__preview" src="{{ .draft.ImageSrc }}" alt="{{ .draft.Name }}">
-                        <span class="draft-form__caption">Изображение</span>
+                        <span class="draft-form__caption">Фото</span>
                     </div>
                     <div class="draft-form__media-item">
                         <video class="draft-form__preview" src="{{ .draft.VideoSrc }}" muted autoplay loop playsinline></video>
@@ -58,32 +58,25 @@
             <section class="draft-form__section">
                 <h2 class="draft-form__section-title">Описание</h2>
                 <label class="field">
-                    <span class="field__label">Имя сановника</span>
+                    <span class="field__label">Название</span>
                     <input class="field__input" type="text" value="{{ .draft.Name }}" disabled>
                 </label>
                 <label class="field">
-                    <span class="field__label">Должность</span>
-                    <input class="field__input" type="text" name="dignitary_office" value="{{ .draft.Office }}" required maxlength="255">
-                </label>
-                <label class="field">
                     <span class="field__label">Краткое описание</span>
-                    <textarea class="field__input field__input--area" name="dignitary_description" required>{{ .draft.Description }}</textarea>
+                    <textarea class="field__input field__input--area" name="description" required>{{ .draft.DescriptionText }}</textarea>
                 </label>
             </section>
 
             <section class="draft-form__section">
-                <h2 class="draft-form__section-title">Годы в должности</h2>
-                <p class="draft-form__hint">Годы до н.э. указываются со знаком минус</p>
+                <h2 class="draft-form__section-title">Даты пребывания в должности</h2>
                 <div class="field-row">
                     <label class="field">
-                        <span class="field__label">Год начала</span>
-                        <input class="field__input" type="number" name="office_start" required
-                               value="{{ with .draft.OfficeStart }}{{ . }}{{ end }}">
+                        <span class="field__label">Дата начала</span>
+                        <input class="field__input" type="date" name="start_date" value="{{ .draft.StartInput }}" required>
                     </label>
                     <label class="field">
-                        <span class="field__label">Год окончания</span>
-                        <input class="field__input" type="number" name="office_end" required
-                               value="{{ with .draft.OfficeEnd }}{{ . }}{{ end }}">
+                        <span class="field__label">Дата окончания</span>
+                        <input class="field__input" type="date" name="end_date" value="{{ .draft.EndInput }}" required>
                     </label>
                 </div>
             </section>

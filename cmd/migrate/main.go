@@ -18,20 +18,20 @@ func main() {
 		logrus.Fatalf("ошибка подключения к БД: %v", err)
 	}
 
-	// Создание таблиц users, dignitaries, dignitary_likes
+	// Создание таблиц users, dignitarie_lists, dignitarie_list_likes
 	err = db.AutoMigrate(
 		&ds.User{},
-		&ds.Dignitary{},
-		&ds.DignitaryLike{},
+		&ds.DignitarieList{},
+		&ds.DignitarieListLike{},
 	)
 	if err != nil {
 		logrus.Fatalf("ошибка миграции: %v", err)
 	}
 
-	// Год окончания не раньше года начала
+	// Дата окончания не раньше даты начала
 	err = db.Exec(`DO $$ BEGIN
-		ALTER TABLE dignitaries ADD CONSTRAINT chk_dignitaries_office_years
-			CHECK (office_start IS NULL OR office_end IS NULL OR office_start <= office_end);
+		ALTER TABLE dignitarie_lists ADD CONSTRAINT chk_dignitarie_lists_dates
+			CHECK (start_date IS NULL OR end_date IS NULL OR start_date <= end_date);
 		EXCEPTION WHEN duplicate_object THEN NULL;
 	END $$;`).Error
 	if err != nil {

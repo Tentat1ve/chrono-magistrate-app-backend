@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"fmt"
-	"html/template"
 	"net/http"
 	"time"
 
@@ -13,9 +11,11 @@ import (
 
 // Фото и видео по умолчанию хранятся на SSR-сервере вместе с иконками
 const (
-	defaultImageURL = "/static/img/default_dignitary.svg"
-	defaultVideoURL = "/static/img/default_dignitary.mp4"
+	defaultImageURL = "/static/img/default_dignitarie_list.svg"
+	defaultVideoURL = "/static/img/default_dignitarie_list.mp4"
 )
+
+const catalogURL = "/dignitarie_lists/catalog"
 
 // currentUserID — текущий пользователь (создатель) до появления авторизации
 const currentUserID uint = 1
@@ -34,31 +34,24 @@ func NewHandler(r *repository.Repository, minioURL string) *Handler {
 	}
 }
 
+// RegisterHandler — 6 HTTP-методов: 3 GET, 2 POST через ORM и 1 POST удаления через SQL
 func (h *Handler) RegisterHandler(router *gin.Engine) {
-	router.GET("/dignitaries", h.GetDignitaries)
-	router.GET("/dignitary_feed", h.GetDignitaryFeed)
-	router.GET("/dignitary_feed/:id", h.GetDignitaryFeed)
-	router.GET("/dignitary_draft", h.GetDignitaryDraft)
-	router.POST("/dignitary_draft", h.CreateDignitaryDraft)
-	router.POST("/dignitary_draft/publish", h.PublishDignitaryDraft)
-	router.POST("/dignitaries/:id/delete", h.DeleteDignitary)
+	router.GET("/dignitarie_lists/feed", h.GetDignitarieListFeed)
+	router.GET("/dignitarie_lists/draft", h.GetDignitarieListDraft)
+	router.GET("/dignitarie_lists/catalog", h.GetDignitarieListCatalog)
+	router.POST("/dignitarie_lists/draft", h.CreateDignitarieListDraft)
+	router.POST("/dignitarie_lists/draft/publish", h.PublishDignitarieListDraft)
+	router.POST("/dignitarie_lists/delete", h.DeleteDignitarieList)
 }
 
 func (h *Handler) RegisterStatic(router *gin.Engine) {
-	router.SetFuncMap(template.FuncMap{"formatYear": formatYear})
 	router.LoadHTMLGlob("templates/*")
 	router.Static("/static", "./static")
-}
 
-// formatYear выводит год с учётом эры: -63 → «63 г. до н.э.», 1565 → «1565 г.»
-func formatYear(year *int) string {
-	if year == nil {
-		return "—"
-	}
-	if *year < 0 {
-		return fmt.Sprintf("%d г. до н.э.", -*year)
-	}
-	return fmt.Sprintf("%d г.", *year)
+	// несуществующие адреса перенаправляются на плитку вместо ответа 404
+	router.NoRoute(func(ctx *gin.Context) {
+		ctx.Redirect(http.StatusSeeOther, catalogURL)
+	})
 }
 
 // mediaURL возвращает url, если файл по нему доступен, иначе url файла по умолчанию
@@ -75,8 +68,4 @@ func (h *Handler) mediaURL(url, fallback string) string {
 		return fallback
 	}
 	return url
-}
-
-func (h *Handler) errorPage(ctx *gin.Context, status int, message string) {
-	ctx.HTML(status, "error.html", gin.H{"status": status, "message": message})
 }
