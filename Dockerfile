@@ -8,7 +8,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/dignitaries
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/dignitarie_lists
 
 FROM alpine:latest
 WORKDIR /root/

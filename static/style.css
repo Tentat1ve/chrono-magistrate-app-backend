@@ -108,60 +108,51 @@ body {
     text-shadow: 0 1px 4px rgba(0, 0, 0, .9);
 }
 
-.feed__author {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-}
-
-.feed__avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--color-accent);
-    background: var(--color-paper);
-}
-
-.feed__office {
-    font-size: 13px;
-    font-family: system-ui, sans-serif;
-    opacity: .9;
-}
-
 .feed__title {
-    margin: 0 0 4px;
+    margin: 0 0 6px;
     font-size: 20px;
 }
 
-/* «Больше / меньше» без JavaScript */
-.feed__more {
-    list-style: none;
-    cursor: pointer;
-    color: var(--color-accent);
-    font-size: 13px;
-    font-family: system-ui, sans-serif;
-}
-
-.feed__more::-webkit-details-marker {
+/* Короткое описание — 2 строки, «Ещё…» раскрывает весь текст (без JavaScript) */
+.feed__toggle {
     display: none;
 }
 
-.feed__more::after {
-    content: "больше…";
-}
-
-.feed__details[open] .feed__more::after {
-    content: "меньше";
-}
-
 .feed__description {
-    margin: 6px 0 0;
+    margin: 0;
     font-size: 14px;
     line-height: 1.4;
-    max-height: 30vh;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.feed__more {
+    display: inline-block;
+    margin-top: 4px;
+    cursor: pointer;
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: system-ui, sans-serif;
+}
+
+.feed__more::after {
+    content: "Ещё…";
+}
+
+.feed__toggle:checked ~ .feed__info .feed__description {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    max-height: 32vh;
     overflow-y: auto;
+}
+
+.feed__toggle:checked ~ .feed__info .feed__more::after {
+    content: "Свернуть";
 }
 
 .feed__actions {

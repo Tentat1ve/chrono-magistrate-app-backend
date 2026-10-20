@@ -1,0 +1,16 @@
+{{ define "tabbar" }}
+<nav class="tab-bar">
+    <a href="/dignitarie_lists/feed" class="tab-bar__item {{ if eq . "feed" }}tab-bar__item--active{{ end }}">
+        <span class="tab-bar__icon">▶</span>
+        <span>Лента</span>
+    </a>
+    <a href="/dignitarie_lists/draft" class="tab-bar__item {{ if eq . "draft" }}tab-bar__item--active{{ end }}">
+        <span class="tab-bar__icon">＋</span>
+        <span>Добавление</span>
+    </a>
+    <a href="/dignitarie_lists/catalog" class="tab-bar__item {{ if eq . "catalog" }}tab-bar__item--active{{ end }}">
+        <span class="tab-bar__icon">▦</span>
+        <span>Плитка</span>
+    </a>
+</nav>
+{{ end }}

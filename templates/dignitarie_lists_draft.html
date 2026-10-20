@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добавление</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="phone">
+    <main class="page">
+        <h1 class="page__title">Новый сановник</h1>
+
+        <!-- Страница без сохранения: поля можно заполнять, кнопок нет -->
+        <form class="draft-form">
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Фото и видео</h2>
+                <div class="draft-form__media">
+                    <label class="draft-form__media-item">
+                        <img class="draft-form__preview" src="{{ .dignitarieList.ImageURL }}" alt="{{ .dignitarieList.Name }}">
+                        <span class="draft-form__caption">Выбрать фото</span>
+                        <input type="file" name="image" accept="image/*">
+                    </label>
+                    <label class="draft-form__media-item">
+                        <video class="draft-form__preview" src="{{ .dignitarieList.VideoURL }}" muted playsinline></video>
+                        <span class="draft-form__caption">Выбрать видео</span>
+                        <input type="file" name="video" accept="video/*">
+                    </label>
+                </div>
+            </section>
+
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Описание</h2>
+                <label class="field">
+                    <span class="field__label">Название</span>
+                    <input class="field__input" type="text" name="name" value="{{ .dignitarieList.Name }}">
+                </label>
+                <label class="field">
+                    <span class="field__label">Краткое описание</span>
+                    <textarea class="field__input field__input--area" name="description">{{ .dignitarieList.Description }}</textarea>
+                </label>
+            </section>
+
+            <section class="draft-form__section">
+                <h2 class="draft-form__section-title">Даты пребывания в должности</h2>
+                <div class="field-row">
+                    <label class="field">
+                        <span class="field__label">Дата начала</span>
+                        <input class="field__input" type="date" name="start_date" value="{{ .dignitarieList.StartInput }}">
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Дата окончания</span>
+                        <input class="field__input" type="date" name="end_date" value="{{ .dignitarieList.EndInput }}">
+                    </label>
+                </div>
+            </section>
+        </form>
+    </main>
+    {{ template "tabbar" "draft" }}
+</div>
+</body>
+</html>

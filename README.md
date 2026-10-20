@@ -1,31 +1,30 @@
 # Определение года события по упоминанию сановников — ЛР1
 
-`Услуги` — сановники (визири, консулы, воеводы) с годами пребывания в должности.
-Поля по теме: `OfficeStart` и `OfficeEnd` — год начала и конца пребывания в должности (до н.э. — отрицательные числа).
+`Услуги` — `dignitarie_lists`: сановники (визири, консулы, воеводы) с датами пребывания в должности.
+Поля по теме: `StartDate` — дата вступления в должность и `EndDate` — дата оставления должности.
+
+Данные берутся из коллекции в памяти (`internal/app/repository/dignitarie_list.go`), без БД. Изображения и видео лежат в Minio, в модели хранятся их ключи (`ImageKey`, `VideoKey`).
 
 ## Страницы (3 GET-запроса)
 
-| Страница    | URL                                                     | Обработчик          |
-|-------------|---------------------------------------------------------|---------------------|
-| Лента       | `/dignitary_feed`, `/dignitary_feed/:id`, `/dignitary_feed/:id?next=true` | `GetDignitaryFeed`  |
-| Добавление  | `/dignitary_draft`                                      | `GetDignitaryDraft` |
-| Плитка      | `/dignitaries?office_year=1570`                         | `GetDignitaries`    |
+| Страница    | URL                                                                                   | Контроллер                  |
+|-------------|---------------------------------------------------------------------------------------|-----------------------------|
+| Лента       | `/dignitarie_lists/feed`, `/dignitarie_lists/feed?id=3`, `/dignitarie_lists/feed?id=3&next=true` | `GetDignitarieListFeed`     |
+| Добавление  | `/dignitarie_lists/draft`                                                             | `GetDignitarieListDraft`    |
+| Плитка      | `/dignitarie_lists/catalog?date=1570-01-01`                                           | `GetDignitarieListCatalog`  |
 
-Фильтр плитки: сановники, бывшие в должности в указанном году (`OfficeStart <= office_year <= OfficeEnd`).
-
-Данные — коллекция в `internal/app/repository/repository.go` (без БД): статусы `черновик`/`опубликован`/`удален`, лайки — массив ID пользователей, количество считается в обработчике.
+- Лента без `id` (переход с панели вкладок) показывает первую опубликованную услугу, с `id` — выбранную, с `next=true` — следующую после неё. Если услуга удалена или не найдена, выполняется перенаправление на плитку.
+- Фильтр плитки — календарь с кнопкой «Найти»: показываются сановники, находившиеся в должности в выбранную дату. Выбранная дата сохраняется в поле после запроса.
+- Лайки — ID пользователей внутри услуги, число лайков считается в контроллере.
 
 ## Запуск
 
-1. Положить в папку `media/` изображения и видео с ключами из коллекции:
-   `ibrahim_pasha`, `sokollu_mehmed`, `cicero`, `caesar`, `shein`, `kara_mustafa`, `rustem_pasha`, `pompey` — для каждого `.jpg` и `.mp4`.
-2. Поднять Minio (создаст публичный бакет `dignitaries` и загрузит файлы из `media/`):
+1. Положить в `media/` изображения и видео (ключи указаны в коллекции) и поднять Minio:
    ```bash
    docker compose up -d
    ```
-   Консоль Minio: http://localhost:9001 (minioadmin / minioadminpassword).
-3. Запустить сервер:
+2. Запустить сервер:
    ```bash
-   go run ./cmd/dignitaries
+   go run ./cmd/dignitarie_lists
    ```
-   Открыть http://localhost:8080/dignitaries
+   Открыть http://localhost:8080/dignitarie_lists/catalog

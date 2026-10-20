@@ -1,23 +1,14 @@
 package api
 
 import (
-	"fmt"
-	"html/template"
 	"log"
+	"net/http"
 
 	"awesomeProject/internal/app/handler"
 	"awesomeProject/internal/app/repository"
 
 	"github.com/gin-gonic/gin"
 )
-
-// formatYear выводит год с учётом эры: -63 → «63 г. до н.э.», 1565 → «1565 г.»
-func formatYear(year int) string {
-	if year < 0 {
-		return fmt.Sprintf("%d г. до н.э.", -year)
-	}
-	return fmt.Sprintf("%d г.", year)
-}
 
 func StartServer(minioURL string) {
 	log.Println("Server start up")
@@ -26,15 +17,18 @@ func StartServer(minioURL string) {
 	h := handler.NewHandler(repo)
 
 	r := gin.Default()
-	r.SetFuncMap(template.FuncMap{"formatYear": formatYear})
 	r.LoadHTMLGlob("templates/*")
 	r.Static("/static", "./static")
 
-	r.GET("/dignitaries", h.GetDignitaries)
-	r.GET("/dignitary_feed", h.GetDignitaryFeed)
-	r.GET("/dignitary_feed/:id", h.GetDignitaryFeed)
-	r.GET("/dignitary_draft", h.GetDignitaryDraft)
+	h.RegisterHandler(r)
 
-	r.Run(":8080")
+	// несуществующие адреса перенаправляются на плитку вместо ответа 404
+	r.NoRoute(func(ctx *gin.Context) {
+		ctx.Redirect(http.StatusSeeOther, "/dignitarie_lists/catalog")
+	})
+
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 	log.Println("Server down")
 }
