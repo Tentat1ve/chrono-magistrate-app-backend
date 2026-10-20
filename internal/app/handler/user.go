@@ -17,7 +17,7 @@ import (
 func (h *Handler) RegisterUser(ctx *gin.Context) {
 	var req serializer.RegisterRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		h.errorJSON(ctx, http.StatusBadRequest, "укажите login (3–50 символов), full_name и password (от 6 символов)")
+		h.errorJSON(ctx, http.StatusBadRequest, "укажите login (3–50 символов) и password (от 6 символов)")
 		return
 	}
 
@@ -27,11 +27,7 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	user := ds.User{
-		Login:        strings.TrimSpace(req.Login),
-		FullName:     strings.TrimSpace(req.FullName),
-		PasswordHash: string(hash),
-	}
+	user := ds.User{Login: strings.TrimSpace(req.Login), PasswordHash: string(hash)}
 	if err := h.Repository.CreateUser(&user); err != nil {
 		if errors.Is(err, repository.ErrAlreadyExists) {
 			h.errorJSON(ctx, http.StatusConflict, "пользователь с таким логином уже существует")

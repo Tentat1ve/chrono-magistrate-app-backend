@@ -2,51 +2,51 @@
 -- (после go run ./cmd/migrate). Пароль всех пользователей: password123
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-INSERT INTO users (id, login, full_name, password_hash, created_at) VALUES
-    (1, 'tentative', 'Тентатив (создатель)', crypt('password123', gen_salt('bf', 10)), now()),
-    (2, 'historian', 'Историк', crypt('password123', gen_salt('bf', 10)), now()),
-    (3, 'chronicler', 'Летописец', crypt('password123', gen_salt('bf', 10)), now()),
-    (4, 'archivist', 'Архивариус', crypt('password123', gen_salt('bf', 10)), now()),
-    (5, 'student', 'Студент', crypt('password123', gen_salt('bf', 10)), now());
+INSERT INTO users (id, login, password_hash) VALUES
+    (1, 'tentative',  crypt('password123', gen_salt('bf', 10))),
+    (2, 'historian',  crypt('password123', gen_salt('bf', 10))),
+    (3, 'chronicler', crypt('password123', gen_salt('bf', 10))),
+    (4, 'archivist',  crypt('password123', gen_salt('bf', 10))),
+    (5, 'student',    crypt('password123', gen_salt('bf', 10)));
 SELECT setval('users_id_seq', (SELECT max(id) FROM users));
 
-INSERT INTO dignitaries (id, name, office, description, status, image_url, video_url,
-                         office_start, office_end, created_at, published_at, creator_id) VALUES
-    (1, 'Ибрагим-паша Паргалы', 'Великий визирь Османской империи',
-     'Друг детства и зять Сулеймана Великолепного. Руководил походами на Венгрию, при нём состоялась битва при Мохаче (1526) и первая осада Вены (1529). Казнён по приказу султана в 1536 году.',
+INSERT INTO dignitarie_lists (id, name, description, status, image_url, video_url,
+                              start_date, end_date, created_at, published_at, creator_id) VALUES
+    (1, 'Ибрагим-паша Паргалы',
+     'Великий визирь Османской империи, друг детства и зять Сулеймана Великолепного. Руководил походами на Венгрию: при нём состоялась битва при Мохаче (1526) и первая осада Вены (1529). Казнён по приказу султана.',
      'опубликован', 'http://localhost:9000/dignitaries/ibrahim_pasha.jpg', 'http://localhost:9000/dignitaries/ibrahim_pasha.mp4',
-     1523, 1536, now(), now(), 1),
-    (2, 'Мехмед-паша Соколлу', 'Великий визирь Османской империи',
-     'Служил трём султанам: Сулейману I, Селиму II и Мураду III. При нём взят Сигетвар (1566), заключён Адрианопольский мир с Габсбургами (1568) и проиграна битва при Лепанто (1571).',
+     '1523-06-27', '1536-03-15', now(), now(), 1),
+    (2, 'Мехмед-паша Соколлу',
+     'Великий визирь Османской империи при трёх султанах: Сулеймане I, Селиме II и Мураде III. При нём взят Сигетвар (1566), заключён Адрианопольский мир с Габсбургами (1568) и проиграна битва при Лепанто (1571).',
      'опубликован', 'http://localhost:9000/dignitaries/sokollu_mehmed.jpg', 'http://localhost:9000/dignitaries/sokollu_mehmed.mp4',
-     1565, 1579, now(), now(), 1),
-    (3, 'Марк Туллий Цицерон', 'Консул Римской республики',
-     'Оратор и политик. В год его консульства был раскрыт заговор Катилины, а сам Цицерон получил титул «Отец Отечества». Коллега по консульству — Гай Антоний Гибрида.',
-     'опубликован', 'http://localhost:9000/dignitaries/cicero.jpg', 'http://localhost:9000/dignitaries/cicero.mp4',
-     -63, -63, now(), now(), 1),
-    (4, 'Гай Юлий Цезарь', 'Консул Римской республики',
-     'Первое консульство Цезаря вместе с Марком Кальпурнием Бибулом. В этот год был принят аграрный закон, а Цезарь получил наместничество в Галлии.',
-     'опубликован', 'http://localhost:9000/dignitaries/caesar.jpg', 'http://localhost:9000/dignitaries/caesar.mp4',
-     -59, -59, now(), now(), 1),
-    (5, 'Михаил Борисович Шеин', 'Воевода Смоленска',
-     'Руководил обороной Смоленска от войск Сигизмунда III в 1609–1611 годах. Осада длилась 20 месяцев, город пал в июне 1611 года, а Шеин попал в польский плен.',
+     '1565-06-28', '1579-10-11', now(), now(), 1),
+    (3, 'Марк Ульпий Траян',
+     'Консул Римской империи 100 года вместе с Секстом Юлием Фронтином. Римский император 98–117 годов: при нём империя достигла наибольших размеров, были завоёваны Дакия и Парфия.',
+     'опубликован', 'http://localhost:9000/dignitaries/trajan.jpg', 'http://localhost:9000/dignitaries/trajan.mp4',
+     '0100-01-01', '0100-12-31', now(), now(), 1),
+    (4, 'Марк Аврелий',
+     'Консул Римской империи 140 года вместе с Антонином Пием. Будущий император (161–180), философ-стоик, автор сочинения «К самому себе».',
+     'опубликован', 'http://localhost:9000/dignitaries/marcus_aurelius.jpg', 'http://localhost:9000/dignitaries/marcus_aurelius.mp4',
+     '0140-01-01', '0140-12-31', now(), now(), 1),
+    (5, 'Михаил Борисович Шеин',
+     'Воевода Смоленска. Руководил обороной города от войск Сигизмунда III в 1609–1611 годах. Осада длилась 20 месяцев, город пал в июне 1611 года, а Шеин попал в польский плен.',
      'опубликован', 'http://localhost:9000/dignitaries/shein.jpg', 'http://localhost:9000/dignitaries/shein.mp4',
-     1607, 1611, now(), now(), 1),
-    (6, 'Кара-Мустафа-паша', 'Великий визирь Османской империи',
-     'Возглавил вторую осаду Вены в 1683 году. После поражения от войск Яна III Собеского был казнён в Белграде по приказу Мехмеда IV.',
+     '1609-09-16', '1611-06-03', now(), now(), 1),
+    (6, 'Кара-Мустафа-паша',
+     'Великий визирь Османской империи. Возглавил вторую осаду Вены в 1683 году. После поражения от войск Яна III Собеского казнён в Белграде по приказу султана Мехмеда IV.',
      'опубликован', 'http://localhost:9000/dignitaries/kara_mustafa.jpg', 'http://localhost:9000/dignitaries/kara_mustafa.mp4',
-     1676, 1683, now(), now(), 1),
-    (7, 'Рустем-паша', 'Великий визирь Османской империи',
-     'Зять Сулеймана Великолепного, муж Михримах-султан. Известен финансовыми реформами и мечетью Рустема-паши в Стамбуле.',
+     '1676-11-01', '1683-12-25', now(), now(), 1),
+    (7, 'Рустем-паша',
+     'Великий визирь Османской империи, зять Сулеймана Великолепного, муж Михримах-султан. Известен финансовыми реформами и мечетью Рустема-паши в Стамбуле.',
      'удален', 'http://localhost:9000/dignitaries/rustem_pasha.jpg', 'http://localhost:9000/dignitaries/rustem_pasha.mp4',
-     1544, 1553, now(), now(), 1),
-    (8, 'Гней Помпей Великий', 'Консул Римской республики',
-     'Первое консульство Помпея совместно с Марком Лицинием Крассом. Восстановлены полномочия народных трибунов, урезанные Суллой.',
-     'черновик', 'http://localhost:9000/dignitaries/pompey.jpg', 'http://localhost:9000/dignitaries/pompey.mp4',
-     -70, -70, now(), NULL, 1);
-SELECT setval('dignitaries_id_seq', (SELECT max(id) FROM dignitaries));
+     '1544-10-07', '1553-10-06', now(), now(), 1),
+    (8, 'Публий Элий Адриан',
+     'Консул Римской империи 118 года вместе с Гнеем Педанием Фуском Салинатором. Римский император 117–138 годов, построивший Адрианов вал в Британии.',
+     'черновик', 'http://localhost:9000/dignitaries/hadrian.jpg', 'http://localhost:9000/dignitaries/hadrian.mp4',
+     '0118-01-01', '0118-12-31', now(), NULL, 1);
+SELECT setval('dignitarie_lists_id_seq', (SELECT max(id) FROM dignitarie_lists));
 
-INSERT INTO dignitary_likes (user_id, dignitary_id) VALUES
+INSERT INTO dignitarie_list_likes (user_id, dignitarie_list_id) VALUES
     (1, 1), (2, 1), (3, 1),
     (2, 2), (4, 2),
     (1, 3), (2, 3), (3, 3), (4, 3), (5, 3),

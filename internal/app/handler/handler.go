@@ -18,22 +18,21 @@ func NewHandler(r *repository.Repository) *Handler {
 	return &Handler{Repository: r}
 }
 
-// RegisterHandler — маршруты веб-сервиса, все начинаются с /api
+// RegisterHandler — 10 методов веб-сервиса, все адреса начинаются с /api
 func (h *Handler) RegisterHandler(router *gin.Engine) {
 	api := router.Group("/api")
 
-	// Домен «сановники» (услуги)
-	dignitaries := api.Group("/dignitaries")
-	dignitaries.GET("", h.GetDignitaries)
-	dignitaries.POST("", h.CreateDignitary)
-	dignitaries.GET("/feed", h.GetDignitaryFeed)
-	dignitaries.GET("/feed/:id", h.GetDignitaryFeed)
-	dignitaries.GET("/draft", h.GetDignitaryDraft)
-	dignitaries.PUT("/draft/publish", h.PublishDignitaryDraft)
-	dignitaries.DELETE("/:id", h.DeleteDignitary)
-	dignitaries.POST("/:id/like", h.LikeDignitary)
+	// Домен «услуги» — 7 методов
+	dignitarieLists := api.Group("/dignitarie_lists")
+	dignitarieLists.GET("", h.GetDignitarieLists)
+	dignitarieLists.GET("/feed", h.GetDignitarieListFeed)
+	dignitarieLists.GET("/draft", h.GetDignitarieListDraft)
+	dignitarieLists.POST("", h.CreateDignitarieList)
+	dignitarieLists.PUT("/draft/publish", h.PublishDignitarieListDraft)
+	dignitarieLists.DELETE("/:id", h.DeleteDignitarieList)
+	dignitarieLists.POST("/:id/like", h.LikeDignitarieList)
 
-	// Домен «пользователи»
+	// Домен «пользователи» — 3 метода
 	users := api.Group("/users")
 	users.POST("/register", h.RegisterUser)
 	users.POST("/login", h.LoginUser)

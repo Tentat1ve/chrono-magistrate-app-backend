@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Сановники — ЛР3",
-    "description": "Запросы веб-сервиса «Определение года события по упоминанию сановников». В запросе «Добавление сановника» выберите файлы image и video.",
+    "description": "Запросы веб-сервиса «Определение года события по упоминанию сановников». В запросе «Добавление» выберите файлы image и video.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -9,21 +9,21 @@
   ],
   "item": [
     {
-      "name": "1. Список сановников с фильтром",
+      "name": "1. Список с фильтром по дате",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/dignitaries?office_year=1570",
+          "raw": "{{baseUrl}}/dignitarie_lists?date=1570-01-01",
           "host": ["{{baseUrl}}"],
-          "path": ["dignitaries"],
+          "path": ["dignitarie_lists"],
           "query": [
-            { "key": "office_year", "value": "1570" }
+            { "key": "date", "value": "1570-01-01" }
           ]
         }
       }
     },
     {
-      "name": "2. Добавление сановника (черновик) с изображением и видео",
+      "name": "2. Добавление (черновик) с изображением и видео",
       "request": {
         "method": "POST",
         "body": {
@@ -34,14 +34,14 @@
             { "key": "video", "type": "file", "src": [] }
           ]
         },
-        "url": { "raw": "{{baseUrl}}/dignitaries", "host": ["{{baseUrl}}"], "path": ["dignitaries"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists"] }
       }
     },
     {
       "name": "3. Черновик текущего пользователя",
       "request": {
         "method": "GET",
-        "url": { "raw": "{{baseUrl}}/dignitaries/draft", "host": ["{{baseUrl}}"], "path": ["dignitaries", "draft"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/draft", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "draft"] }
       }
     },
     {
@@ -51,44 +51,47 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"office\": \"Воевода Зарайска\",\n  \"description\": \"Князь, будущий руководитель Второго ополчения. В 1610–1611 годах воевода Зарайска.\",\n  \"office_start\": 1610,\n  \"office_end\": 1611\n}"
+          "raw": "{\n  \"description\": \"Князь, будущий руководитель Второго ополчения. В 1610–1611 годах воевода Зарайска.\",\n  \"start_date\": \"1610-01-01\",\n  \"end_date\": \"1611-12-31\"\n}"
         },
-        "url": { "raw": "{{baseUrl}}/dignitaries/draft/publish", "host": ["{{baseUrl}}"], "path": ["dignitaries", "draft", "publish"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/draft/publish", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "draft", "publish"] }
       }
     },
     {
       "name": "5. Лента без id",
       "request": {
         "method": "GET",
-        "url": { "raw": "{{baseUrl}}/dignitaries/feed", "host": ["{{baseUrl}}"], "path": ["dignitaries", "feed"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/feed", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "feed"] }
       }
     },
     {
-      "name": "6. Лента: следующий после id (?next=true)",
+      "name": "6. Лента: следующая после id (?next=true)",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/dignitaries/feed/1?next=true",
+          "raw": "{{baseUrl}}/dignitarie_lists/feed?id=1&next=true",
           "host": ["{{baseUrl}}"],
-          "path": ["dignitaries", "feed", "1"],
-          "query": [{ "key": "next", "value": "true" }]
+          "path": ["dignitarie_lists", "feed"],
+          "query": [
+            { "key": "id", "value": "1" },
+            { "key": "next", "value": "true" }
+          ]
         }
       }
     },
     {
-      "name": "7. Лайк сановнику",
+      "name": "7. Лайк",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": { "mode": "raw", "raw": "{\n  \"liked\": 1\n}" },
-        "url": { "raw": "{{baseUrl}}/dignitaries/4/like", "host": ["{{baseUrl}}"], "path": ["dignitaries", "4", "like"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/4/like", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "4", "like"] }
       }
     },
     {
-      "name": "8. Удаление сановника",
+      "name": "8. Удаление",
       "request": {
         "method": "DELETE",
-        "url": { "raw": "{{baseUrl}}/dignitaries/6", "host": ["{{baseUrl}}"], "path": ["dignitaries", "6"] }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/6", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "6"] }
       }
     },
     {
@@ -98,7 +101,7 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"login\": \"new_user\",\n  \"full_name\": \"Новый пользователь\",\n  \"password\": \"secret123\"\n}"
+          "raw": "{\n  \"login\": \"new_user\",\n  \"password\": \"secret123\"\n}"
         },
         "url": { "raw": "{{baseUrl}}/users/register", "host": ["{{baseUrl}}"], "path": ["users", "register"] }
       }

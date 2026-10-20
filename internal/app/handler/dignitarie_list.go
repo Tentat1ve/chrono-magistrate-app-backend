@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"awesomeProject/internal/app/ds"
@@ -16,86 +17,91 @@ import (
 )
 
 const (
+	dateLayout   = "2006-01-02"
 	maxImageSize = 10 << 20 // 10 МБ
 	maxVideoSize = 50 << 20 // 50 МБ
 )
 
-// GetDignitaries — GET /api/dignitaries?office_year=1570
-// Список опубликованных сановников с признаком is_creator.
-func (h *Handler) GetDignitaries(ctx *gin.Context) {
+// GetDignitarieLists — GET /api/dignitarie_lists?date=1570-01-01
+// Список опубликованных услуг с признаком is_creator; необязательный фильтр —
+// сановники, находившиеся в должности в указанную дату.
+func (h *Handler) GetDignitarieLists(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
 
-	var year *int
-	if yearQuery := ctx.Query("office_year"); yearQuery != "" {
-		y, err := strconv.Atoi(yearQuery)
+	var onDate *time.Time
+	if dateQuery := ctx.Query("date"); dateQuery != "" {
+		parsed, err := time.Parse(dateLayout, dateQuery)
 		if err != nil {
-			h.errorJSON(ctx, http.StatusBadRequest, "office_year должен быть целым числом (до н.э. — отрицательным)")
+			h.errorJSON(ctx, http.StatusBadRequest, "date должна быть в формате ГГГГ-ММ-ДД")
 			return
 		}
-		year = &y
+		onDate = &parsed
 	}
 
-	dignitaries, err := h.Repository.GetDignitaries(year)
+	dignitarieLists, err := h.Repository.GetDignitarieLists(onDate)
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
 
-	result := make([]serializer.DignitaryListItemJSON, 0, len(dignitaries))
-	for _, d := range dignitaries {
-		result = append(result, serializer.DignitaryToListItem(d, user.ID))
+	result := make([]serializer.DignitarieListItemJSON, 0, len(dignitarieLists))
+	for _, d := range dignitarieLists {
+		result = append(result, serializer.DignitarieListToItem(d, user.ID))
 	}
 	ctx.JSON(http.StatusOK, result)
 }
 
-// GetDignitaryFeed — GET /api/dignitaries/feed, /api/dignitaries/feed/:id, /api/dignitaries/feed/:id?next=true
-// Один опубликованный сановник с признаком is_liked.
-func (h *Handler) GetDignitaryFeed(ctx *gin.Context) {
+// GetDignitarieListFeed — GET /api/dignitarie_lists/feed[?id=3[&next=true]]
+// Одна опубликованная услуга с признаками is_liked и is_creator.
+// Без id (переход с панели вкладок) возвращается первая услуга, с id — выбранная,
+// с id и next=true — следующая после неё.
+func (h *Handler) GetDignitarieListFeed(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
 
-	var dignitary ds.Dignitary
-	if idStr := ctx.Param("id"); idStr == "" {
-		dignitary, err = h.Repository.GetNextDignitary(0)
+	var dignitarieList ds.DignitarieList
+	if idQuery := ctx.Query("id"); idQuery == "" {
+		dignitarieList, err = h.Repository.GetNextDignitarieList(0)
 	} else {
-		id, ok := h.parseID(ctx)
-		if !ok {
+		id, convErr := strconv.ParseUint(idQuery, 10, 64)
+		if convErr != nil || id == 0 {
+			h.errorJSON(ctx, http.StatusBadRequest, "некорректный id")
 			return
 		}
 		if ctx.Query("next") == "true" {
-			dignitary, err = h.Repository.GetNextDignitary(id)
+			dignitarieList, err = h.Repository.GetNextDignitarieList(uint(id))
 		} else {
-			dignitary, err = h.Repository.GetDignitary(id)
+			dignitarieList, err = h.Repository.GetDignitarieList(uint(id))
 		}
 	}
 
 	if errors.Is(err, repository.ErrNotFound) {
-		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
+		h.errorJSON(ctx, http.StatusNotFound, "услуга не найдена")
 		return
 	}
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, serializer.DignitaryToFeed(dignitary, user.ID))
+	ctx.JSON(http.StatusOK, serializer.DignitarieListToFeed(dignitarieList, user.ID))
 }
 
-// GetDignitaryDraft — GET /api/dignitaries/draft — черновик текущего пользователя
-func (h *Handler) GetDignitaryDraft(ctx *gin.Context) {
+// GetDignitarieListDraft — GET /api/dignitarie_lists/draft — черновик текущего пользователя
+func (h *Handler) GetDignitarieListDraft(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
 
-	draft, err := h.Repository.GetDraftDignitary(user.ID)
+	draft, err := h.Repository.GetDraftDignitarieList(user.ID)
 	if errors.Is(err, repository.ErrNotFound) {
 		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
 		return
@@ -104,12 +110,12 @@ func (h *Handler) GetDignitaryDraft(ctx *gin.Context) {
 		h.internalError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, serializer.DignitaryToJSON(draft))
+	ctx.JSON(http.StatusOK, serializer.DignitarieListToJSON(draft))
 }
 
-// CreateDignitary — POST /api/dignitaries (multipart/form-data: name, image, video)
+// CreateDignitarieList — POST /api/dignitarie_lists (multipart/form-data: name, image, video)
 // Создаёт черновик; файлы сохраняются в Minio под сгенерированными латинскими именами.
-func (h *Handler) CreateDignitary(ctx *gin.Context) {
+func (h *Handler) CreateDignitarieList(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
@@ -130,25 +136,25 @@ func (h *Handler) CreateDignitary(ctx *gin.Context) {
 		return
 	}
 
-	if _, err := h.Repository.GetDraftDignitary(user.ID); err == nil {
+	if _, err := h.Repository.GetDraftDignitarieList(user.ID); err == nil {
 		h.errorJSON(ctx, http.StatusConflict, "у пользователя уже есть черновик")
 		return
 	}
 
-	imageURL, err := h.upload(ctx, "dignitary_image", image)
+	imageURL, err := h.upload(ctx, "dignitarie_list_image", image)
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
-	videoURL, err := h.upload(ctx, "dignitary_video", video)
+	videoURL, err := h.upload(ctx, "dignitarie_list_video", video)
 	if err != nil {
 		h.Repository.RemoveFile(ctx, imageURL)
 		h.internalError(ctx, err)
 		return
 	}
 
-	dignitary := ds.Dignitary{Name: name, ImageURL: imageURL, VideoURL: videoURL, CreatorID: user.ID}
-	if err := h.Repository.CreateDraftDignitary(&dignitary); err != nil {
+	dignitarieList := ds.DignitarieList{Name: name, ImageURL: imageURL, VideoURL: videoURL, CreatorID: user.ID}
+	if err := h.Repository.CreateDraftDignitarieList(&dignitarieList); err != nil {
 		h.Repository.RemoveFile(ctx, imageURL)
 		h.Repository.RemoveFile(ctx, videoURL)
 		if errors.Is(err, repository.ErrAlreadyExists) {
@@ -159,7 +165,7 @@ func (h *Handler) CreateDignitary(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, serializer.DignitaryToJSON(dignitary))
+	ctx.JSON(http.StatusCreated, serializer.DignitarieListToJSON(dignitarieList))
 }
 
 // formFile достаёт файл из формы и проверяет тип и размер
@@ -189,27 +195,32 @@ func (h *Handler) upload(ctx *gin.Context, prefix string, file *multipart.FileHe
 	return h.Repository.UploadFile(ctx, prefix, file.Filename, file.Header.Get("Content-Type"), f, file.Size)
 }
 
-// PublishDignitaryDraft — PUT /api/dignitaries/draft/publish
-// Заполняет поля черновика и меняет статус на «опубликован».
-func (h *Handler) PublishDignitaryDraft(ctx *gin.Context) {
+// PublishDignitarieListDraft — PUT /api/dignitarie_lists/draft/publish
+// Заполняет необязательные поля черновика и меняет статус на «опубликован».
+func (h *Handler) PublishDignitarieListDraft(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
 		return
 	}
 
-	var req serializer.PublishDignitaryRequest
+	var req serializer.PublishDignitarieListRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		h.errorJSON(ctx, http.StatusBadRequest, "заполните office, description, office_start и office_end")
+		h.errorJSON(ctx, http.StatusBadRequest, "заполните description, start_date и end_date")
 		return
 	}
-	if *req.OfficeStart > *req.OfficeEnd {
-		h.errorJSON(ctx, http.StatusBadRequest, "office_start не может быть больше office_end")
+	startDate, errStart := time.Parse(dateLayout, req.StartDate)
+	endDate, errEnd := time.Parse(dateLayout, req.EndDate)
+	if errStart != nil || errEnd != nil {
+		h.errorJSON(ctx, http.StatusBadRequest, "start_date и end_date должны быть в формате ГГГГ-ММ-ДД")
+		return
+	}
+	if startDate.After(endDate) {
+		h.errorJSON(ctx, http.StatusBadRequest, "start_date не может быть позже end_date")
 		return
 	}
 
-	dignitary, err := h.Repository.PublishDignitary(user.ID, strings.TrimSpace(req.Office),
-		strings.TrimSpace(req.Description), *req.OfficeStart, *req.OfficeEnd)
+	dignitarieList, err := h.Repository.PublishDignitarieList(user.ID, strings.TrimSpace(req.Description), startDate, endDate)
 	if errors.Is(err, repository.ErrNotFound) {
 		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
 		return
@@ -218,11 +229,11 @@ func (h *Handler) PublishDignitaryDraft(ctx *gin.Context) {
 		h.internalError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, serializer.DignitaryToJSON(dignitary))
+	ctx.JSON(http.StatusOK, serializer.DignitarieListToJSON(dignitarieList))
 }
 
-// DeleteDignitary — DELETE /api/dignitaries/:id — логическое удаление своего сановника
-func (h *Handler) DeleteDignitary(ctx *gin.Context) {
+// DeleteDignitarieList — DELETE /api/dignitarie_lists/:id — логическое удаление своей услуги
+func (h *Handler) DeleteDignitarieList(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
@@ -233,12 +244,12 @@ func (h *Handler) DeleteDignitary(ctx *gin.Context) {
 		return
 	}
 
-	err = h.Repository.DeleteDignitary(id, user.ID)
+	err = h.Repository.DeleteDignitarieList(id, user.ID)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
+		h.errorJSON(ctx, http.StatusNotFound, "услуга не найдена")
 	case errors.Is(err, repository.ErrForbidden):
-		h.errorJSON(ctx, http.StatusForbidden, "удалять можно только своих сановников")
+		h.errorJSON(ctx, http.StatusForbidden, "удалять можно только свои услуги")
 	case err != nil:
 		h.internalError(ctx, err)
 	default:
@@ -246,8 +257,8 @@ func (h *Handler) DeleteDignitary(ctx *gin.Context) {
 	}
 }
 
-// LikeDignitary — POST /api/dignitaries/:id/like, тело {"liked": 1} или {"liked": 0}
-func (h *Handler) LikeDignitary(ctx *gin.Context) {
+// LikeDignitarieList — POST /api/dignitarie_lists/:id/like, тело {"liked": 1} или {"liked": 0}
+func (h *Handler) LikeDignitarieList(ctx *gin.Context) {
 	user, err := h.CurrentUser()
 	if err != nil {
 		h.internalError(ctx, err)
@@ -264,9 +275,9 @@ func (h *Handler) LikeDignitary(ctx *gin.Context) {
 		return
 	}
 
-	dignitary, err := h.Repository.SetLike(id, user.ID, *req.Liked == 1)
+	dignitarieList, err := h.Repository.SetLike(id, user.ID, *req.Liked == 1)
 	if errors.Is(err, repository.ErrNotFound) {
-		h.errorJSON(ctx, http.StatusNotFound, "сановник не найден")
+		h.errorJSON(ctx, http.StatusNotFound, "услуга не найдена")
 		return
 	}
 	if err != nil {
@@ -275,9 +286,9 @@ func (h *Handler) LikeDignitary(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, serializer.LikeResponse{
-		DignitaryID: dignitary.ID,
-		IsLiked:     *req.Liked,
-		LikesCount:  len(dignitary.Likes),
+		DignitarieListID: dignitarieList.ID,
+		IsLiked:          *req.Liked,
+		LikesCount:       len(dignitarieList.Likes),
 	})
 }
 
