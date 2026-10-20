@@ -146,6 +146,25 @@ func UserToJSON(u ds.User) UserJSON {
 	return UserJSON{ID: u.ID, Login: u.Login}
 }
 
+// LoginResponse — ответ аутентификации: токен для заголовка Authorization
+type LoginResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type" example:"Bearer"`
+	ExpiresIn   int    `json:"expires_in" example:"3600"` // время жизни токена, секунды
+}
+
+// DeleteResponse — ответ на удаление услуги
+type DeleteResponse struct {
+	Status    string `json:"status" example:"ok"`
+	DeletedID uint   `json:"deleted_id"`
+}
+
+// StatusResponse — простой ответ со статусом
+type StatusResponse struct {
+	Status  string `json:"status" example:"ok"`
+	Message string `json:"message"`
+}
+
 // ErrorJSON — описание ошибки
 type ErrorJSON struct {
 	Status      string `json:"status"`

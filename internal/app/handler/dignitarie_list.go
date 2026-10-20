@@ -22,16 +22,16 @@ const (
 	maxVideoSize = 50 << 20 // 50 МБ
 )
 
-// GetDignitarieLists — GET /api/dignitarie_lists?date=1570-01-01
-// Список опубликованных услуг с признаком is_creator; необязательный фильтр —
-// сановники, находившиеся в должности в указанную дату.
+// GetDignitarieLists godoc
+// @Summary      Список услуг
+// @Description  Опубликованные услуги (плитка). Доступен гостю; для авторизованного пользователя признак is_creator = 1 у его услуг. Необязательный фильтр date — сановники, находившиеся в должности в указанную дату.
+// @Tags         Услуги
+// @Produce      json
+// @Param        date  query     string  false  "Дата в формате ГГГГ-ММ-ДД"  example(1570-01-01)
+// @Success      200   {array}   serializer.DignitarieListItemJSON
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists [get]
 func (h *Handler) GetDignitarieLists(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
-
 	var onDate *time.Time
 	if dateQuery := ctx.Query("date"); dateQuery != "" {
 		parsed, err := time.Parse(dateLayout, dateQuery)
@@ -48,25 +48,30 @@ func (h *Handler) GetDignitarieLists(ctx *gin.Context) {
 		return
 	}
 
+	userID := currentUserID(ctx)
 	result := make([]serializer.DignitarieListItemJSON, 0, len(dignitarieLists))
 	for _, d := range dignitarieLists {
-		result = append(result, serializer.DignitarieListToItem(d, user.ID))
+		result = append(result, serializer.DignitarieListToItem(d, userID))
 	}
 	ctx.JSON(http.StatusOK, result)
 }
 
-// GetDignitarieListFeed — GET /api/dignitarie_lists/feed[?id=3[&next=true]]
-// Одна опубликованная услуга с признаками is_liked и is_creator.
-// Без id (переход с панели вкладок) возвращается первая услуга, с id — выбранная,
-// с id и next=true — следующая после неё.
+// GetDignitarieListFeed godoc
+// @Summary      Лента
+// @Description  Одна опубликованная услуга. Без параметров (переход с панели вкладок) — первая услуга, id — выбранная, id и next=true — следующая после неё. Доступна гостю; для авторизованного пользователя признаки is_liked и is_creator.
+// @Tags         Услуги
+// @Produce      json
+// @Param        id    query     int   false  "ID услуги"
+// @Param        next  query     bool  false  "true — вернуть следующую услугу после id"
+// @Success      200   {object}  serializer.DignitarieListFeedJSON
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Failure      404   {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists/feed [get]
 func (h *Handler) GetDignitarieListFeed(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
-
-	var dignitarieList ds.DignitarieList
+	var (
+		dignitarieList ds.DignitarieList
+		err            error
+	)
 	if idQuery := ctx.Query("id"); idQuery == "" {
 		dignitarieList, err = h.Repository.GetNextDignitarieList(0)
 	} else {
@@ -90,18 +95,21 @@ func (h *Handler) GetDignitarieListFeed(ctx *gin.Context) {
 		h.internalError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, serializer.DignitarieListToFeed(dignitarieList, user.ID))
+	ctx.JSON(http.StatusOK, serializer.DignitarieListToFeed(dignitarieList, currentUserID(ctx)))
 }
 
-// GetDignitarieListDraft — GET /api/dignitarie_lists/draft — черновик текущего пользователя
+// GetDignitarieListDraft godoc
+// @Summary      Черновик
+// @Description  Черновик текущего пользователя (не более одного), id не указывается. Требует авторизации.
+// @Tags         Услуги
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Success      200  {object}  serializer.DignitarieListJSON
+// @Failure      401  {object}  serializer.ErrorJSON
+// @Failure      404  {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists/draft [get]
 func (h *Handler) GetDignitarieListDraft(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
-
-	draft, err := h.Repository.GetDraftDignitarieList(user.ID)
+	draft, err := h.Repository.GetDraftDignitarieList(currentUserID(ctx))
 	if errors.Is(err, repository.ErrNotFound) {
 		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
 		return
@@ -113,14 +121,23 @@ func (h *Handler) GetDignitarieListDraft(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.DignitarieListToJSON(draft))
 }
 
-// CreateDignitarieList — POST /api/dignitarie_lists (multipart/form-data: name, image, video)
-// Создаёт черновик; файлы сохраняются в Minio под сгенерированными латинскими именами.
+// CreateDignitarieList godoc
+// @Summary      Добавление услуги
+// @Description  Создаёт черновик. Файлы изображения и видео сохраняются в MinIO под сгенерированными латинскими именами, в БД записываются их url. Создатель подставляется из токена. Требует авторизации.
+// @Tags         Услуги
+// @Accept       mpfd
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        name   formData  string  true  "Наименование"
+// @Param        image  formData  file    true  "Изображение (image/*, до 10 МБ)"
+// @Param        video  formData  file    true  "Короткое видео (video/*, до 50 МБ)"
+// @Success      201    {object}  serializer.DignitarieListJSON
+// @Failure      400    {object}  serializer.ErrorJSON
+// @Failure      401    {object}  serializer.ErrorJSON
+// @Failure      409    {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists [post]
 func (h *Handler) CreateDignitarieList(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
+	userID := currentUserID(ctx)
 
 	name := strings.TrimSpace(ctx.PostForm("name"))
 	if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 255 {
@@ -136,7 +153,7 @@ func (h *Handler) CreateDignitarieList(ctx *gin.Context) {
 		return
 	}
 
-	if _, err := h.Repository.GetDraftDignitarieList(user.ID); err == nil {
+	if _, err := h.Repository.GetDraftDignitarieList(userID); err == nil {
 		h.errorJSON(ctx, http.StatusConflict, "у пользователя уже есть черновик")
 		return
 	}
@@ -153,7 +170,7 @@ func (h *Handler) CreateDignitarieList(ctx *gin.Context) {
 		return
 	}
 
-	dignitarieList := ds.DignitarieList{Name: name, ImageURL: imageURL, VideoURL: videoURL, CreatorID: user.ID}
+	dignitarieList := ds.DignitarieList{Name: name, ImageURL: imageURL, VideoURL: videoURL, CreatorID: userID}
 	if err := h.Repository.CreateDraftDignitarieList(&dignitarieList); err != nil {
 		h.Repository.RemoveFile(ctx, imageURL)
 		h.Repository.RemoveFile(ctx, videoURL)
@@ -195,15 +212,20 @@ func (h *Handler) upload(ctx *gin.Context, prefix string, file *multipart.FileHe
 	return h.Repository.UploadFile(ctx, prefix, file.Filename, file.Header.Get("Content-Type"), f, file.Size)
 }
 
-// PublishDignitarieListDraft — PUT /api/dignitarie_lists/draft/publish
-// Заполняет необязательные поля черновика и меняет статус на «опубликован».
+// PublishDignitarieListDraft godoc
+// @Summary      Публикация услуги
+// @Description  Заполняет необязательные поля черновика текущего пользователя и меняет статус на «опубликован». Для гостя — 401. Требует авторизации.
+// @Tags         Услуги
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        body  body      serializer.PublishDignitarieListRequest  true  "Краткое описание и две даты по теме"
+// @Success      200   {object}  serializer.DignitarieListJSON
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Failure      401   {object}  serializer.ErrorJSON
+// @Failure      404   {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists/draft/publish [put]
 func (h *Handler) PublishDignitarieListDraft(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
-
 	var req serializer.PublishDignitarieListRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		h.errorJSON(ctx, http.StatusBadRequest, "заполните description, start_date и end_date")
@@ -220,7 +242,7 @@ func (h *Handler) PublishDignitarieListDraft(ctx *gin.Context) {
 		return
 	}
 
-	dignitarieList, err := h.Repository.PublishDignitarieList(user.ID, strings.TrimSpace(req.Description), startDate, endDate)
+	dignitarieList, err := h.Repository.PublishDignitarieList(currentUserID(ctx), strings.TrimSpace(req.Description), startDate, endDate)
 	if errors.Is(err, repository.ErrNotFound) {
 		h.errorJSON(ctx, http.StatusNotFound, "у пользователя нет черновика")
 		return
@@ -232,19 +254,26 @@ func (h *Handler) PublishDignitarieListDraft(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.DignitarieListToJSON(dignitarieList))
 }
 
-// DeleteDignitarieList — DELETE /api/dignitarie_lists/:id — логическое удаление своей услуги
+// DeleteDignitarieList godoc
+// @Summary      Удаление услуги
+// @Description  Логическое удаление (статус «удален») своей услуги. Требует авторизации.
+// @Tags         Услуги
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        id   path      int  true  "ID услуги"
+// @Success      200  {object}  serializer.DeleteResponse
+// @Failure      400  {object}  serializer.ErrorJSON
+// @Failure      401  {object}  serializer.ErrorJSON
+// @Failure      403  {object}  serializer.ErrorJSON
+// @Failure      404  {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists/{id} [delete]
 func (h *Handler) DeleteDignitarieList(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
 	id, ok := h.parseID(ctx)
 	if !ok {
 		return
 	}
 
-	err = h.Repository.DeleteDignitarieList(id, user.ID)
+	err := h.Repository.DeleteDignitarieList(id, currentUserID(ctx))
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		h.errorJSON(ctx, http.StatusNotFound, "услуга не найдена")
@@ -253,17 +282,25 @@ func (h *Handler) DeleteDignitarieList(ctx *gin.Context) {
 	case err != nil:
 		h.internalError(ctx, err)
 	default:
-		ctx.JSON(http.StatusOK, gin.H{"status": "ok", "deleted_id": id})
+		ctx.JSON(http.StatusOK, serializer.DeleteResponse{Status: "ok", DeletedID: id})
 	}
 }
 
-// LikeDignitarieList — POST /api/dignitarie_lists/:id/like, тело {"liked": 1} или {"liked": 0}
+// LikeDignitarieList godoc
+// @Summary      Лайк
+// @Description  Ставит (liked = 1) или отменяет (liked = 0) лайк текущего пользователя. Требует авторизации.
+// @Tags         Услуги
+// @Accept       json
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Param        id    path      int                      true  "ID услуги"
+// @Param        body  body      serializer.LikeRequest   true  "liked: 1 — поставить, 0 — отменить"
+// @Success      200   {object}  serializer.LikeResponse
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Failure      401   {object}  serializer.ErrorJSON
+// @Failure      404   {object}  serializer.ErrorJSON
+// @Router       /dignitarie_lists/{id}/like [post]
 func (h *Handler) LikeDignitarieList(ctx *gin.Context) {
-	user, err := h.CurrentUser()
-	if err != nil {
-		h.internalError(ctx, err)
-		return
-	}
 	id, ok := h.parseID(ctx)
 	if !ok {
 		return
@@ -275,7 +312,7 @@ func (h *Handler) LikeDignitarieList(ctx *gin.Context) {
 		return
 	}
 
-	dignitarieList, err := h.Repository.SetLike(id, user.ID, *req.Liked == 1)
+	dignitarieList, err := h.Repository.SetLike(id, currentUserID(ctx), *req.Liked == 1)
 	if errors.Is(err, repository.ErrNotFound) {
 		h.errorJSON(ctx, http.StatusNotFound, "услуга не найдена")
 		return

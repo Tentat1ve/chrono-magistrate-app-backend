@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"awesomeProject/internal/app/ds"
 	"awesomeProject/internal/app/repository"
@@ -13,7 +14,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// RegisterUser — POST /api/users/register
+// RegisterUser godoc
+// @Summary      Регистрация
+// @Description  Создаёт пользователя; пароль хранится в виде bcrypt-хеша и в ответе не возвращается. Доступна гостю.
+// @Tags         Пользователи
+// @Accept       json
+// @Produce      json
+// @Param        body  body      serializer.RegisterRequest  true  "Логин (3–50 символов) и пароль (от 6 символов)"
+// @Success      201   {object}  serializer.UserJSON
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Failure      409   {object}  serializer.ErrorJSON
+// @Router       /users/register [post]
 func (h *Handler) RegisterUser(ctx *gin.Context) {
 	var req serializer.RegisterRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -40,8 +51,17 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, serializer.UserToJSON(user))
 }
 
-// LoginUser — POST /api/users/login
-// Заглушка до ЛР4: проверяет логин и пароль, но сессию/токен не выдаёт.
+// LoginUser godoc
+// @Summary      Аутентификация
+// @Description  Проверяет логин и пароль и выдаёт JWT. Токен передаётся в заголовке Authorization: Bearer <токен>. Доступна гостю.
+// @Tags         Пользователи
+// @Accept       json
+// @Produce      json
+// @Param        body  body      serializer.LoginRequest  true  "Логин и пароль"
+// @Success      200   {object}  serializer.LoginResponse
+// @Failure      400   {object}  serializer.ErrorJSON
+// @Failure      401   {object}  serializer.ErrorJSON
+// @Router       /users/login [post]
 func (h *Handler) LoginUser(ctx *gin.Context) {
 	var req serializer.LoginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -58,14 +78,38 @@ func (h *Handler) LoginUser(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"message": "заглушка: токен будет выдаваться в ЛР4",
-		"user":    serializer.UserToJSON(user),
+	token, _, err := h.newToken(user.ID)
+	if err != nil {
+		h.internalError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, serializer.LoginResponse{
+		AccessToken: token,
+		TokenType:   "Bearer",
+		ExpiresIn:   int(h.JWT.ExpiresIn.Seconds()),
 	})
 }
 
-// LogoutUser — POST /api/users/logout — заглушка до ЛР4
+// LogoutUser godoc
+// @Summary      Деавторизация
+// @Description  Отзывает токен: его идентификатор попадает в чёрный список Redis до конца срока жизни токена, после этого токен не принимается. Требует авторизации.
+// @Tags         Пользователи
+// @Produce      json
+// @Security     ApiKeyAuth
+// @Success      200  {object}  serializer.StatusResponse
+// @Failure      401  {object}  serializer.ErrorJSON
+// @Router       /users/logout [post]
 func (h *Handler) LogoutUser(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{"status": "ok", "message": "заглушка: деавторизация будет в ЛР4"})
+	claims := currentClaims(ctx)
+
+	ttl := time.Until(claims.ExpiresAt.Time)
+	if ttl > 0 {
+		if err := h.Redis.AddToBlacklist(ctx.Request.Context(), claims.ID, ttl); err != nil {
+			h.internalError(ctx, err)
+			return
+		}
+	}
+
+	ctx.JSON(http.StatusOK, serializer.StatusResponse{Status: "ok", Message: "токен отозван"})
 }

@@ -1,31 +1,71 @@
 {
   "info": {
-    "name": "Сановники — ЛР3",
-    "description": "Запросы веб-сервиса «Определение года события по упоминанию сановников». В запросе «Добавление» выберите файлы image и video.",
+    "name": "Сановники — ЛР4",
+    "description": "Сначала выполните «Вход»: токен сохранится в переменную {{token}} и подставится в запросы создателя (Bearer). В запросе «Добавление» выберите файлы image и video.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080/api" }
+    { "key": "baseUrl", "value": "http://localhost:8080/api" },
+    { "key": "token", "value": "" }
   ],
   "item": [
     {
-      "name": "1. Список с фильтром по дате",
+      "name": "1. Список (гость)",
       "request": {
         "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/dignitarie_lists?date=1570-01-01",
-          "host": ["{{baseUrl}}"],
-          "path": ["dignitarie_lists"],
-          "query": [
-            { "key": "date", "value": "1570-01-01" }
-          ]
-        }
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists?date=1570-01-01", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists"], "query": [{ "key": "date", "value": "1570-01-01" }] }
       }
     },
     {
-      "name": "2. Добавление (черновик) с изображением и видео",
+      "name": "2. Лента (гость)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/feed", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "feed"] }
+      }
+    },
+    {
+      "name": "3. Регистрация",
       "request": {
         "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"login\": \"newuser\",\n  \"password\": \"secret123\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/register", "host": ["{{baseUrl}}"], "path": ["users", "register"] }
+      }
+    },
+    {
+      "name": "4. Вход (сохраняет токен)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "if (body.access_token) { pm.collectionVariables.set('token', body.access_token); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"login\": \"tentative\",\n  \"password\": \"password123\"\n}" },
+        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
+      }
+    },
+    {
+      "name": "5. Лента (с токеном)",
+      "request": {
+        "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/feed", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "feed"] }
+      }
+    },
+    {
+      "name": "6. Добавление (черновик) с изображением и видео",
+      "request": {
+        "method": "POST",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
         "body": {
           "mode": "formdata",
           "formdata": [
@@ -38,87 +78,56 @@
       }
     },
     {
-      "name": "3. Черновик текущего пользователя",
+      "name": "7. Черновик",
       "request": {
         "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
         "url": { "raw": "{{baseUrl}}/dignitarie_lists/draft", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "draft"] }
       }
     },
     {
-      "name": "4. Публикация черновика",
+      "name": "8. Публикация черновика (с токеном)",
       "request": {
         "method": "PUT",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"description\": \"Князь, будущий руководитель Второго ополчения. В 1610–1611 годах воевода Зарайска.\",\n  \"start_date\": \"1610-01-01\",\n  \"end_date\": \"1611-12-31\"\n}"
-        },
+        "body": { "mode": "raw", "raw": "{\n  \"description\": \"Руководитель Второго ополчения\",\n  \"start_date\": \"1612-01-01\",\n  \"end_date\": \"1612-12-31\"\n}" },
         "url": { "raw": "{{baseUrl}}/dignitarie_lists/draft/publish", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "draft", "publish"] }
       }
     },
     {
-      "name": "5. Лента без id",
+      "name": "9. Публикация черновика (гость — 401)",
       "request": {
-        "method": "GET",
-        "url": { "raw": "{{baseUrl}}/dignitarie_lists/feed", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "feed"] }
+        "method": "PUT",
+        "auth": { "type": "noauth" },
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"description\": \"Руководитель Второго ополчения\",\n  \"start_date\": \"1612-01-01\",\n  \"end_date\": \"1612-12-31\"\n}" },
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/draft/publish", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "draft", "publish"] }
       }
     },
     {
-      "name": "6. Лента: следующая после id (?next=true)",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/dignitarie_lists/feed?id=1&next=true",
-          "host": ["{{baseUrl}}"],
-          "path": ["dignitarie_lists", "feed"],
-          "query": [
-            { "key": "id", "value": "1" },
-            { "key": "next", "value": "true" }
-          ]
-        }
-      }
-    },
-    {
-      "name": "7. Лайк",
+      "name": "10. Лайк",
       "request": {
         "method": "POST",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": { "mode": "raw", "raw": "{\n  \"liked\": 1\n}" },
         "url": { "raw": "{{baseUrl}}/dignitarie_lists/4/like", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "4", "like"] }
       }
     },
     {
-      "name": "8. Удаление",
+      "name": "11. Удаление",
       "request": {
         "method": "DELETE",
-        "url": { "raw": "{{baseUrl}}/dignitarie_lists/6", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "6"] }
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "url": { "raw": "{{baseUrl}}/dignitarie_lists/8", "host": ["{{baseUrl}}"], "path": ["dignitarie_lists", "8"] }
       }
     },
     {
-      "name": "9. Регистрация пользователя",
+      "name": "12. Выход (токен в чёрный список)",
       "request": {
         "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"login\": \"new_user\",\n  \"password\": \"secret123\"\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/users/register", "host": ["{{baseUrl}}"], "path": ["users", "register"] }
-      }
-    },
-    {
-      "name": "10. Аутентификация (заглушка)",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"login\": \"new_user\",\n  \"password\": \"secret123\"\n}" },
-        "url": { "raw": "{{baseUrl}}/users/login", "host": ["{{baseUrl}}"], "path": ["users", "login"] }
-      }
-    },
-    {
-      "name": "11. Деавторизация (заглушка)",
-      "request": {
-        "method": "POST",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
         "url": { "raw": "{{baseUrl}}/users/logout", "host": ["{{baseUrl}}"], "path": ["users", "logout"] }
       }
     }

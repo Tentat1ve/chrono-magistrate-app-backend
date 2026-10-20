@@ -1,0 +1,505 @@
+basePath: /api
+definitions:
+  serializer.DeleteResponse:
+    properties:
+      deleted_id:
+        type: integer
+      status:
+        example: ok
+        type: string
+    type: object
+  serializer.DignitarieListFeedJSON:
+    properties:
+      description:
+        type: string
+      end_date:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      is_creator:
+        type: integer
+      is_liked:
+        type: integer
+      likes_count:
+        type: integer
+      name:
+        type: string
+      start_date:
+        type: string
+      video_url:
+        type: string
+    type: object
+  serializer.DignitarieListItemJSON:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      is_creator:
+        type: integer
+      likes_count:
+        type: integer
+      name:
+        type: string
+      start_date:
+        type: string
+    type: object
+  serializer.DignitarieListJSON:
+    properties:
+      description:
+        type: string
+      end_date:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      name:
+        type: string
+      start_date:
+        type: string
+      status:
+        type: string
+      video_url:
+        type: string
+    type: object
+  serializer.ErrorJSON:
+    properties:
+      description:
+        type: string
+      status:
+        type: string
+    type: object
+  serializer.LikeRequest:
+    properties:
+      liked:
+        enum:
+        - 0
+        - 1
+        type: integer
+    required:
+    - liked
+    type: object
+  serializer.LikeResponse:
+    properties:
+      dignitarie_list_id:
+        type: integer
+      is_liked:
+        type: integer
+      likes_count:
+        type: integer
+    type: object
+  serializer.LoginRequest:
+    properties:
+      login:
+        type: string
+      password:
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  serializer.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        description: время жизни токена, секунды
+        example: 3600
+        type: integer
+      token_type:
+        example: Bearer
+        type: string
+    type: object
+  serializer.PublishDignitarieListRequest:
+    properties:
+      description:
+        type: string
+      end_date:
+        type: string
+      start_date:
+        type: string
+    required:
+    - description
+    - end_date
+    - start_date
+    type: object
+  serializer.RegisterRequest:
+    properties:
+      login:
+        maxLength: 50
+        minLength: 3
+        type: string
+      password:
+        maxLength: 72
+        minLength: 6
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  serializer.StatusResponse:
+    properties:
+      message:
+        type: string
+      status:
+        example: ok
+        type: string
+    type: object
+  serializer.UserJSON:
+    properties:
+      id:
+        type: integer
+      login:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: 'Определение года события по упоминанию сановников. Услуги — списки
+    визирей, консулов и воевод с датами пребывания в должности. Чтение доступно гостю,
+    методы создателя требуют токена: получите его в POST /users/login и нажмите Authorize,
+    вставив значение «Bearer <токен>».'
+  title: Веб-сервис «Списки сановников»
+  version: "1.0"
+paths:
+  /dignitarie_lists:
+    get:
+      description: Опубликованные услуги (плитка). Доступен гостю; для авторизованного
+        пользователя признак is_creator = 1 у его услуг. Необязательный фильтр date
+        — сановники, находившиеся в должности в указанную дату.
+      parameters:
+      - description: Дата в формате ГГГГ-ММ-ДД
+        example: "1570-01-01"
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/serializer.DignitarieListItemJSON'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      summary: Список услуг
+      tags:
+      - Услуги
+    post:
+      consumes:
+      - multipart/form-data
+      description: Создаёт черновик. Файлы изображения и видео сохраняются в MinIO
+        под сгенерированными латинскими именами, в БД записываются их url. Создатель
+        подставляется из токена. Требует авторизации.
+      parameters:
+      - description: Наименование
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Изображение (image/*, до 10 МБ)
+        in: formData
+        name: image
+        required: true
+        type: file
+      - description: Короткое видео (video/*, до 50 МБ)
+        in: formData
+        name: video
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/serializer.DignitarieListJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Добавление услуги
+      tags:
+      - Услуги
+  /dignitarie_lists/{id}:
+    delete:
+      description: Логическое удаление (статус «удален») своей услуги. Требует авторизации.
+      parameters:
+      - description: ID услуги
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.DeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Удаление услуги
+      tags:
+      - Услуги
+  /dignitarie_lists/{id}/like:
+    post:
+      consumes:
+      - application/json
+      description: Ставит (liked = 1) или отменяет (liked = 0) лайк текущего пользователя.
+        Требует авторизации.
+      parameters:
+      - description: ID услуги
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'liked: 1 — поставить, 0 — отменить'
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.LikeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.LikeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Лайк
+      tags:
+      - Услуги
+  /dignitarie_lists/draft:
+    get:
+      description: Черновик текущего пользователя (не более одного), id не указывается.
+        Требует авторизации.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.DignitarieListJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Черновик
+      tags:
+      - Услуги
+  /dignitarie_lists/draft/publish:
+    put:
+      consumes:
+      - application/json
+      description: Заполняет необязательные поля черновика текущего пользователя и
+        меняет статус на «опубликован». Для гостя — 401. Требует авторизации.
+      parameters:
+      - description: Краткое описание и две даты по теме
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.PublishDignitarieListRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.DignitarieListJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Публикация услуги
+      tags:
+      - Услуги
+  /dignitarie_lists/feed:
+    get:
+      description: Одна опубликованная услуга. Без параметров (переход с панели вкладок)
+        — первая услуга, id — выбранная, id и next=true — следующая после неё. Доступна
+        гостю; для авторизованного пользователя признаки is_liked и is_creator.
+      parameters:
+      - description: ID услуги
+        in: query
+        name: id
+        type: integer
+      - description: true — вернуть следующую услугу после id
+        in: query
+        name: next
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.DignitarieListFeedJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      summary: Лента
+      tags:
+      - Услуги
+  /users/login:
+    post:
+      consumes:
+      - application/json
+      description: 'Проверяет логин и пароль и выдаёт JWT. Токен передаётся в заголовке
+        Authorization: Bearer <токен>. Доступна гостю.'
+      parameters:
+      - description: Логин и пароль
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      summary: Аутентификация
+      tags:
+      - Пользователи
+  /users/logout:
+    post:
+      description: 'Отзывает токен: его идентификатор попадает в чёрный список Redis
+        до конца срока жизни токена, после этого токен не принимается. Требует авторизации.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.StatusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      security:
+      - ApiKeyAuth: []
+      summary: Деавторизация
+      tags:
+      - Пользователи
+  /users/register:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт пользователя; пароль хранится в виде bcrypt-хеша и в ответе
+        не возвращается. Доступна гостю.
+      parameters:
+      - description: Логин (3–50 символов) и пароль (от 6 символов)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/serializer.UserJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/serializer.ErrorJSON'
+      summary: Регистрация
+      tags:
+      - Пользователи
+schemes:
+- http
+securityDefinitions:
+  ApiKeyAuth:
+    description: 'Токен JWT в формате: Bearer <токен>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 
+	"awesomeProject/internal/app/config"
+	"awesomeProject/internal/app/redis"
 	"awesomeProject/internal/app/repository"
 	"awesomeProject/internal/app/serializer"
 
@@ -12,31 +14,34 @@ import (
 
 type Handler struct {
 	Repository *repository.Repository
+	Redis      *redis.Client
+	JWT        config.JWTConfig
 }
 
-func NewHandler(r *repository.Repository) *Handler {
-	return &Handler{Repository: r}
+func NewHandler(r *repository.Repository, redisClient *redis.Client, jwtConfig config.JWTConfig) *Handler {
+	return &Handler{Repository: r, Redis: redisClient, JWT: jwtConfig}
 }
 
-// RegisterHandler — 10 методов веб-сервиса, все адреса начинаются с /api
+// RegisterHandler — 10 методов веб-сервиса, все адреса начинаются с /api.
+// Чтение (список, лента) и вход доступны гостю, методы создателя требуют токен.
 func (h *Handler) RegisterHandler(router *gin.Engine) {
 	api := router.Group("/api")
 
 	// Домен «услуги» — 7 методов
 	dignitarieLists := api.Group("/dignitarie_lists")
-	dignitarieLists.GET("", h.GetDignitarieLists)
-	dignitarieLists.GET("/feed", h.GetDignitarieListFeed)
-	dignitarieLists.GET("/draft", h.GetDignitarieListDraft)
-	dignitarieLists.POST("", h.CreateDignitarieList)
-	dignitarieLists.PUT("/draft/publish", h.PublishDignitarieListDraft)
-	dignitarieLists.DELETE("/:id", h.DeleteDignitarieList)
-	dignitarieLists.POST("/:id/like", h.LikeDignitarieList)
+	dignitarieLists.GET("", h.WithOptionalAuth, h.GetDignitarieLists)
+	dignitarieLists.GET("/feed", h.WithOptionalAuth, h.GetDignitarieListFeed)
+	dignitarieLists.GET("/draft", h.WithAuthCheck, h.GetDignitarieListDraft)
+	dignitarieLists.POST("", h.WithAuthCheck, h.CreateDignitarieList)
+	dignitarieLists.PUT("/draft/publish", h.WithAuthCheck, h.PublishDignitarieListDraft)
+	dignitarieLists.DELETE("/:id", h.WithAuthCheck, h.DeleteDignitarieList)
+	dignitarieLists.POST("/:id/like", h.WithAuthCheck, h.LikeDignitarieList)
 
 	// Домен «пользователи» — 3 метода
 	users := api.Group("/users")
 	users.POST("/register", h.RegisterUser)
 	users.POST("/login", h.LoginUser)
-	users.POST("/logout", h.LogoutUser)
+	users.POST("/logout", h.WithAuthCheck, h.LogoutUser)
 }
 
 func (h *Handler) errorJSON(ctx *gin.Context, status int, description string) {
